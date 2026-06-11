@@ -16,13 +16,8 @@
 #ifndef FCP_BASE_MONITORING_H_
 #define FCP_BASE_MONITORING_H_
 
-#include <sstream>
-
-#include "absl/base/attributes.h"
 #include "absl/base/optimization.h"
 #include "absl/log/absl_log.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
 
 namespace fcp {
 
@@ -120,136 +115,6 @@ namespace fcp {
   FCP_LOG_IF(FATAL, __check_status.code() != ::absl::StatusCode::kOk) \
       << "status not OK: " << __check_status
 
-// Status and StatusOr
-// ===================
-
-/**
- * Constructor for a status. A status message can be streamed into it. This
- * captures the current file and line position and includes it into the status
- * message if the status code is not OK.
- *
- * Use as in:
- *
- *   absl::OkStatus()              // signal success
- *   FCP_STATUS(code) << message;  // signal failure
- *
- * FCP_STATUS can be used in places which either expect a Status or a
- * StatusOr<T>.
- */
-#define FCP_STATUS(code) \
-  ::fcp::internal::MakeStatusBuilder(code, __FILE__, __LINE__)
-
-namespace internal {
-/** Functions to assist with FCP_RETURN_IF_ERROR() */
-inline absl::Status AsStatus(const absl::Status& status) { return status; }
-template <typename T>
-inline absl::Status AsStatus(const absl::StatusOr<T>& status_or) {
-  return status_or.status();
-}
-}  // namespace internal
-
-/**
- * Macro which allows to check for a Status (or StatusOr) and return from the
- * current method if not OK. Example:
- *
- *     Status DoSomething() {
- *       FCP_RETURN_IF_ERROR(Step1());
- *       FCP_RETURN_IF_ERROR(Step2ReturningStatusOr().status());
- *       return absl::OkStatus();
- *     }
- */
-#define FCP_RETURN_IF_ERROR(expr)                              \
-  do {                                                         \
-    ::absl::Status __status = ::fcp::internal::AsStatus(expr); \
-    if (__status.code() != ::absl::StatusCode::kOk) {          \
-      return (__status);                                       \
-    }                                                          \
-  } while (false)
-
-/**
- * Macro which allows to check for a StatusOr and return it's status if not OK,
- * otherwise assign the value in the StatusOr to variable or declaration. Usage:
- *
- *     StatusOr<bool> DoSomething() {
- *       FCP_ASSIGN_OR_RETURN(auto value, TryComputeSomething());
- *       if (!value) {
- *         FCP_ASSIGN_OR_RETURN(value, TryComputeSomethingElse());
- *       }
- *       return value;
- *     }
- */
-#define FCP_ASSIGN_OR_RETURN(lhs, expr) \
-  _FCP_ASSIGN_OR_RETURN_1(              \
-      _FCP_ASSIGN_OR_RETURN_CONCAT(statusor_for_aor, __LINE__), lhs, expr)
-
-#define _FCP_ASSIGN_OR_RETURN_1(statusor, lhs, expr) \
-  auto statusor = (expr);                            \
-  if (!statusor.ok()) {                              \
-    return statusor.status();                        \
-  }                                                  \
-  lhs = std::move(statusor).value()
-
-// See https://goo.gl/x3iba2 for the reason of this construction.
-#define _FCP_ASSIGN_OR_RETURN_CONCAT(x, y) \
-  _FCP_ASSIGN_OR_RETURN_CONCAT_INNER(x, y)
-#define _FCP_ASSIGN_OR_RETURN_CONCAT_INNER(x, y) x##y
-
-// Status Implementation Details
-// =============================
-
-namespace internal {
-
-/**
- * Helper class which allows to construct a status with message by streaming
- * into it. Implicitly converts to Status and StatusOr so can be used as a drop
- * in replacement when those types are expected.
- */
-class ABSL_MUST_USE_RESULT StatusBuilder {
- public:
-  /** Construct a StatusBuilder from status code. */
-  StatusBuilder(absl::StatusCode code, const char* file, int line);
-
-  /**
-   * Copy constructor for status builder. Most of the time not needed because of
-   * copy ellision. */
-  StatusBuilder(StatusBuilder const& other);
-
-  /** Return true if the constructed status will be OK. */
-  bool ok() const { return code_ == absl::StatusCode::kOk; }
-
-  /** Returns the code of the constructed status. */
-  absl::StatusCode code() const { return code_; }
-
-  /** Stream into status message of this builder. */
-  template <typename T>
-  StatusBuilder& operator<<(T x) {
-    message_ << x;
-    return *this;
-  }
-
-  /** Implicit conversion to Status. */
-  operator absl::Status();  // NOLINT
-
-  /** Implicit conversion to StatusOr. */
-  template <typename T>
-  inline operator absl::StatusOr<T>() {  // NOLINT
-    return absl::StatusOr<T>(static_cast<absl::Status>(*this));
-  }
-
- private:
-  const char* const file_;
-  const int line_;
-  const absl::StatusCode code_;
-
-  std::ostringstream message_;
-};
-
-inline StatusBuilder MakeStatusBuilder(absl::StatusCode code, const char* file,
-                                       int line) {
-  return StatusBuilder(code, file, line);
-}
-
-}  // namespace internal
 }  // namespace fcp
 
 #endif  // FCP_BASE_MONITORING_H_

@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/status_builder.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
 #include "fcp/base/monitoring.h"
@@ -119,7 +120,7 @@ absl::StatusOr<std::string> ShamirSecretSharing::Reconstruct(
     x_values.push_back(i + 1);
   }
   if (static_cast<int>(x_values.size()) < threshold) {
-    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
+    return absl::StatusBuilder(absl::StatusCode::kFailedPrecondition)
            << "Only " << x_values.size()
            << " valid shares were provided, but threshold was specified as "
            << threshold;

@@ -18,26 +18,15 @@
 
 #include <stdio.h>
 
-#include <array>
-#include <memory>
 #include <string>
-#include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/base/log_severity.h"
-#include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
-#include "absl/strings/str_format.h"
-#include "fcp/base/base_name.h"
 
 namespace fcp {
 namespace {
 
-using ::absl_testing::IsOk;
-using ::absl_testing::IsOkAndHolds;
 using ::testing::MatchesRegex;
-using ::testing::Not;
 
 class MonitoringTest : public ::testing::TestWithParam<bool> {
  public:
@@ -95,43 +84,6 @@ TEST_F(MonitoringTest, CheckSucceeds) { FCP_CHECK(1 < 2); }
 
 TEST_F(MonitoringTest, CheckFails) {
   ASSERT_DEATH({ FCP_CHECK(1 < 0); }, "Check failed: 1 < 0.");
-}
-
-TEST_F(MonitoringTest, StatusBuilder) {
-  ASSERT_FALSE(FCP_STATUS(absl::StatusCode::kAborted).ok());
-  ASSERT_EQ(FCP_STATUS(absl::StatusCode::kAborted).code(),
-            absl::StatusCode::kAborted);
-}
-
-TEST_F(MonitoringTest, FcpReturnIfError) {
-  ASSERT_THAT(
-      []() -> absl::StatusOr<int> {
-        absl::Status fail_status = FCP_STATUS(absl::StatusCode::kAborted);
-        FCP_RETURN_IF_ERROR(fail_status);
-        return 0;
-      }(),
-      Not(IsOk()));
-  ASSERT_THAT(
-      []() -> absl::StatusOr<int> {
-        FCP_RETURN_IF_ERROR(absl::Status());
-        return 0;
-      }(),
-      IsOkAndHolds(0));
-
-  ASSERT_THAT(
-      []() -> absl::StatusOr<int> {
-        absl::StatusOr<int> fail_statusor =
-            FCP_STATUS(absl::StatusCode::kAborted);
-        FCP_RETURN_IF_ERROR(fail_statusor);
-        return 0;
-      }(),
-      Not(IsOk()));
-  ASSERT_THAT(
-      []() -> absl::StatusOr<int> {
-        FCP_RETURN_IF_ERROR(absl::StatusOr<int>(0));
-        return 0;
-      }(),
-      IsOkAndHolds(0));
 }
 
 }  // namespace

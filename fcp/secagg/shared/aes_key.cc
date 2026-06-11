@@ -16,6 +16,7 @@
 
 #include <string>
 
+#include "absl/status/status_macros.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/shared/shamir_secret_sharing.h"
 
@@ -48,7 +49,7 @@ absl::StatusOr<AesKey> AesKey::CreateFromShares(
   }
   FCP_CHECK(key_length != 0);
   std::string reconstructed;
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       reconstructed, reconstructor.Reconstruct(threshold, shares, key_length));
 
   if (key_length == kLegacyKeySize) {

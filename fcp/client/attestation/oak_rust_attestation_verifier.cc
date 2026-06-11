@@ -20,6 +20,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/status/status_macros.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
@@ -35,7 +36,6 @@
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "fcp/base/digest.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/rust/oak_attestation_verification_ffi.h"
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"
@@ -66,7 +66,7 @@ absl::StatusOr<AttestationResults> VerifyPublicKeyAttestation(
   // Validate the attestation evidence provided in the encryption config, using
   // the `public_key_reference_values_` provided to us at construction time.
   // TODO: b/432726860 - enable use_policy_api.
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       AttestationResults attestation_results,
       fcp::client::rust::oak_attestation_verification_ffi::VerifyAttestation(
           absl::Now(), encryption_config.attestation_evidence(),
@@ -89,7 +89,7 @@ OakRustAttestationVerifier::Verify(
     const ConfidentialEncryptionConfig& encryption_config) {
   absl::StatusOr<AttestationResults> attestation_results;
   if (public_key_reference_values_.type_case() ==
-          oak::attestation::v1::ReferenceValues::TYPE_NOT_SET) {
+      oak::attestation::v1::ReferenceValues::TYPE_NOT_SET) {
     attestation_results = VerifyPublicKeyAttestation(
         encryption_config,
         access_policy_endorsement_options_.public_key_reference_values());
@@ -161,7 +161,7 @@ OakRustAttestationVerifier::Verify(
         access_policy_endorsement_options_.endorsement_reference_values(0);
 
     // verify_endorsement returns the hash of the endorsed access policy.
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         EndorsementDetails endorsement_details,
         fcp::client::rust::oak_attestation_verification_ffi::VerifyEndorsement(
             absl::Now(), signed_endorsement, endorsement_reference_value));

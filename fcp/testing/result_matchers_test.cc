@@ -21,7 +21,6 @@
 #include "absl/status/status.h"
 #include "fcp/base/error.h"
 #include "fcp/base/meta.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/base/result.h"
 #include "fcp/base/tracing_schema.h"
 #include "fcp/testing/tracing.h"
@@ -54,10 +53,9 @@ TEST(ExpectTest, ExpectIsError) {
 
 TEST(ExpectTest, ExpectStatus) {
   TestTracingRecorder recorder;
-  EXPECT_THAT(
-      Result<absl::Status>(FCP_STATUS(absl::StatusCode::kInvalidArgument))
-          .Then(ExpectStatus<absl::StatusCode::kInvalidArgument>()),
-      HasValue(Unit{}));
+  EXPECT_THAT(Result<absl::Status>(absl::InvalidArgumentError(""))
+                  .Then(ExpectStatus<absl::StatusCode::kInvalidArgument>()),
+              HasValue(Unit{}));
 }
 
 TEST(ExpectTest, ExpectStatusReturnsError) {

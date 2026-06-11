@@ -24,6 +24,7 @@
 #include <string>
 
 #include "gtest/gtest.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/secagg_server_enums.pb.h"
 #include "fcp/secagg/server/secagg_server_messages.pb.h"
 #include "fcp/testing/testing.h"

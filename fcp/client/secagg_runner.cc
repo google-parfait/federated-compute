@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
@@ -127,7 +128,8 @@ absl::Status SecAggRunnerImpl::Run(ComputationResults results) {
   std::vector<secagg::InputVectorSpecification> input_vector_specification;
   for (auto& [k, v] : results) {
     if (std::holds_alternative<QuantizedTensor>(v)) {
-      FCP_ASSIGN_OR_RETURN(uint64_t modulus, protocol_delegate_->GetModulus(k));
+      ABSL_ASSIGN_OR_RETURN(uint64_t modulus,
+                            protocol_delegate_->GetModulus(k));
       // Note: std::move is used below to ensure that each QuantizedTensor
       // is consumed when converted to SecAggVector and that we don't
       // continue having both in memory for longer than needed.
@@ -168,10 +170,10 @@ absl::Status SecAggRunnerImpl::Run(ComputationResults results) {
       std::move(secagg_state_transition_listener),
       std::make_unique<secagg::AesCtrPrngFactory>());
 
-  FCP_RETURN_IF_ERROR(interruptible_runner_.Run(
+  ABSL_RETURN_IF_ERROR(interruptible_runner_.Run(
       [this, &input_map]() -> absl::Status {
-        FCP_RETURN_IF_ERROR(secagg_client_->Start());
-        FCP_RETURN_IF_ERROR(secagg_client_->SetInput(std::move(input_map)));
+        ABSL_RETURN_IF_ERROR(secagg_client_->Start());
+        ABSL_RETURN_IF_ERROR(secagg_client_->SetInput(std::move(input_map)));
         while (!secagg_client_->IsCompletedSuccessfully()) {
           absl::StatusOr<secagg::ServerToClientWrapperMessage>
               server_to_client_wrapper_message =

@@ -20,11 +20,11 @@
 #include <string>
 
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/stats.h"
@@ -715,7 +715,7 @@ absl::Status PhaseLoggerImpl::LogResultUploadStarted() {
       OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED);
   // Commit the run data accumulated thus far to Opstats and fail if
   // something goes wrong.
-  FCP_RETURN_IF_ERROR(opstats_logger_->CommitToStorage());
+  ABSL_RETURN_IF_ERROR(opstats_logger_->CommitToStorage());
   event_publisher_->PublishResultUploadStarted();
   return absl::OkStatus();
 }
@@ -782,7 +782,7 @@ absl::Status PhaseLoggerImpl::LogFailureUploadStarted() {
       OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_STARTED);
   // Commit the run data accumulated thus far to Opstats and fail if
   // something goes wrong.
-  FCP_RETURN_IF_ERROR(opstats_logger_->CommitToStorage());
+  ABSL_RETURN_IF_ERROR(opstats_logger_->CommitToStorage());
   event_publisher_->PublishFailureUploadStarted();
   return absl::OkStatus();
 }

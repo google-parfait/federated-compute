@@ -28,12 +28,12 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
 #include "fcp/base/digest.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_query_result.pb.h"
@@ -206,12 +206,12 @@ absl::StatusOr<bool> ComputeDataAvailabilityEligibility(
             QueryTimeComputationProperties::EXAMPLE_QUERY_RESULT);
   }
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<ExampleIterator> iterator,
       iterator_factory->CreateExampleIterator(selector, selector_context));
   int32_t min_example_count = data_availability_policy.min_example_count();
   if (use_example_query_result_format) {
-    FCP_ASSIGN_OR_RETURN(std::string result, iterator->Next());
+    ABSL_ASSIGN_OR_RETURN(std::string result, iterator->Next());
     ExampleQueryResult example_query_result;
     if (!example_query_result.ParseFromString(result)) {
       return absl::InvalidArgumentError("Failed to parse ExampleQueryResult");

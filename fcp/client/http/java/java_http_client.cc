@@ -25,6 +25,7 @@
 
 #include "google/rpc/status.pb.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -209,7 +210,7 @@ absl::Status JavaHttpClient::PerformRequests(
     env->SetObjectArrayElement(request_handle_array, i++,
                                request_handle->GetJobject());
     FCP_CHECK(!env->ExceptionCheck());
-    FCP_RETURN_IF_ERROR(request_handle->SetCallback(callback));
+    ABSL_RETURN_IF_ERROR(request_handle->SetCallback(callback));
   }
 
   // Call the Java `performRequests` method over JNI, passing it the Object[]

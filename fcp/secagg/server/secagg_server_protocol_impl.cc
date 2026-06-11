@@ -21,10 +21,12 @@
 
 #include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/tracing_schema.h"
 #include "fcp/secagg/shared/compute_session_id.h"
+#include "fcp/secagg/shared/ecdh_keys.h"
 #include "fcp/tracing/tracing_span.h"
 
 namespace {
@@ -320,10 +322,10 @@ SecAggServerProtocolImpl::HandleShamirReconstruction() {
   ShamirSecretSharing reconstructor;
 
   for (const auto& item : *pairwise_shamir_share_table_) {
-    FCP_ASSIGN_OR_RETURN(std::string reconstructed_key,
-                         reconstructor.Reconstruct(
-                             minimum_surviving_neighbors_for_reconstruction(),
-                             item.second, EcdhPrivateKey::kSize));
+    ABSL_ASSIGN_OR_RETURN(std::string reconstructed_key,
+                          reconstructor.Reconstruct(
+                              minimum_surviving_neighbors_for_reconstruction(),
+                              item.second, EcdhPrivateKey::kSize));
     auto key_agreement = EcdhKeyAgreement::CreateFromPrivateKey(EcdhPrivateKey(
         reinterpret_cast<const uint8_t*>(reconstructed_key.c_str())));
     if (!key_agreement.ok()) {
@@ -338,7 +340,7 @@ SecAggServerProtocolImpl::HandleShamirReconstruction() {
   }
 
   for (const auto& item : *self_shamir_share_table_) {
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         AesKey reconstructed,
         AesKey::CreateFromShares(
             item.second, minimum_surviving_neighbors_for_reconstruction()));

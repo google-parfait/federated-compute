@@ -33,6 +33,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/synchronization/mutex.h"
@@ -259,7 +260,7 @@ absl::StatusOr<std::unique_ptr<OpStatsDb>> PdsBackedOpStatsDb::Create(
   auto file_storage = std::make_unique<protostore::FileStorage>();
   std::unique_ptr<protostore::ProtoDataStore<OpStatsSequence>> pds;
   std::string db_path = path.generic_string();
-  FCP_ASSIGN_OR_RETURN(int fd, AcquireFileLock(db_path, log_manager));
+  ABSL_ASSIGN_OR_RETURN(int fd, AcquireFileLock(db_path, log_manager));
   lock_releaser = [db_path, fd]() { ReleaseFileLock(db_path, fd); };
   pds = std::make_unique<protostore::ProtoDataStore<OpStatsSequence>>(
       *file_storage, db_path);
@@ -305,7 +306,7 @@ absl::Status PdsBackedOpStatsDb::Transform(
   auto data_or = ReadInternal(*db_, log_manager_);
   if (!data_or.ok()) {
     // Try resetting after a failed read.
-    FCP_RETURN_IF_ERROR(ResetInternal(*db_, log_manager_));
+    ABSL_RETURN_IF_ERROR(ResetInternal(*db_, log_manager_));
   } else {
     data = std::move(data_or).value();
     RemoveOutdatedData(data, ttl_);

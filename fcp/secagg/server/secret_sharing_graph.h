@@ -17,7 +17,7 @@
 #ifndef FCP_SECAGG_SERVER_SECRET_SHARING_GRAPH_H_
 #define FCP_SECAGG_SERVER_SECRET_SHARING_GRAPH_H_
 
-#include "fcp/base/monitoring.h"
+#include <optional>
 
 namespace fcp {
 namespace secagg {

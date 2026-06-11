@@ -24,6 +24,7 @@
 #include "google/type/datetime.pb.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
@@ -31,7 +32,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/civil_time.h"
 #include "fcp/base/digest.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/event_time_range.pb.h"
 #include "fcp/confidentialcompute/constants.h"
 #include "fcp/confidentialcompute/time_window_utilities.h"
@@ -204,17 +204,17 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
   for (int i = 0; i < event_time_values->string_values().value_size(); ++i) {
     const std::string& event_time_str =
         event_time_values->string_values().value(i);
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         absl::CivilSecond event_civil_second,
         confidentialcompute::ConvertEventTimeToCivilSecond(event_time_str));
 
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         WindowingSchedule::CivilTimeWindowSchedule schedule,
         VerifyConfigHasCivilTimeWindowSchedule(privacy_id_config));
-    FCP_ASSIGN_OR_RETURN(absl::CivilSecond window_start,
-                         GetTimeWindowStart(schedule, event_civil_second));
-    FCP_ASSIGN_OR_RETURN(std::string privacy_id,
-                         GetPrivacyId(source_id, window_start));
+    ABSL_ASSIGN_OR_RETURN(absl::CivilSecond window_start,
+                          GetTimeWindowStart(schedule, event_civil_second));
+    ABSL_ASSIGN_OR_RETURN(std::string privacy_id,
+                          GetPrivacyId(source_id, window_start));
 
     ExampleQueryResultSelection& selection = privacy_id_selections[privacy_id];
     selection.indices.push_back(i);
@@ -228,7 +228,7 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
   for (const auto& [privacy_id, selection] : privacy_id_selections) {
     PerPrivacyIdResult per_privacy_id_result;
     per_privacy_id_result.privacy_id = privacy_id;
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         ExampleQueryResult per_privacy_id_example_query_result,
         CreateExampleQueryResultFromSelection(example_query_result, selection));
 

@@ -26,6 +26,7 @@
 #include "google/protobuf/any.pb.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
@@ -34,7 +35,6 @@
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/http/http_client.h"
@@ -124,8 +124,8 @@ std::string CreateUriSuffixFromPathAndParams(absl::string_view path,
 absl::StatusOr<std::string> CreateGetOperationUriSuffix(
     absl::string_view operation_name) {
   constexpr absl::string_view kGetOperationUriSuffix = "/v1/$0";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_operation_name,
-                       EncodeUriMultiplePathSegments(operation_name));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_operation_name,
+                        EncodeUriMultiplePathSegments(operation_name));
   return absl::Substitute(kGetOperationUriSuffix, encoded_operation_name);
 }
 
@@ -133,8 +133,8 @@ absl::StatusOr<std::string> CreateGetOperationUriSuffix(
 absl::StatusOr<std::string> CreateCancelOperationUriSuffix(
     absl::string_view operation_name) {
   constexpr absl::string_view kCancelOperationUriSuffix = "/v1/$0:cancel";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_operation_name,
-                       EncodeUriMultiplePathSegments(operation_name));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_operation_name,
+                        EncodeUriMultiplePathSegments(operation_name));
   return absl::Substitute(kCancelOperationUriSuffix, encoded_operation_name);
 }
 
@@ -234,8 +234,8 @@ ProtocolRequestCreator::CreateProtocolRequestWithAdditionalHeaders(
 absl::StatusOr<std::unique_ptr<HttpRequest>>
 ProtocolRequestCreator::CreateGetOperationRequest(
     absl::string_view operation_name) const {
-  FCP_ASSIGN_OR_RETURN(std::string uri_path_suffix,
-                       CreateGetOperationUriSuffix(operation_name));
+  ABSL_ASSIGN_OR_RETURN(std::string uri_path_suffix,
+                        CreateGetOperationUriSuffix(operation_name));
   return CreateHttpRequest(uri_path_suffix, {}, HttpRequest::Method::kGet, "",
                            /*is_protobuf_encoded=*/true,
                            /*use_compression=*/false,
@@ -245,8 +245,8 @@ ProtocolRequestCreator::CreateGetOperationRequest(
 absl::StatusOr<std::unique_ptr<HttpRequest>>
 ProtocolRequestCreator::CreateCancelOperationRequest(
     absl::string_view operation_name) const {
-  FCP_ASSIGN_OR_RETURN(std::string uri_path_suffix,
-                       CreateCancelOperationUriSuffix(operation_name));
+  ABSL_ASSIGN_OR_RETURN(std::string uri_path_suffix,
+                        CreateCancelOperationUriSuffix(operation_name));
   return CreateHttpRequest(uri_path_suffix, {}, HttpRequest::Method::kPost, "",
                            /*is_protobuf_encoded=*/true,
                            /*use_compression=*/false,
@@ -279,7 +279,7 @@ ProtocolRequestCreator::CreateHttpRequest(absl::string_view uri_path_suffix,
   if (!params.empty()) {
     uri_with_params = CreateUriSuffixFromPathAndParams(uri_path_suffix, params);
   }
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::string uri,
       JoinBaseUriWithSuffix(next_request_base_uri_, uri_with_params));
 
@@ -320,7 +320,7 @@ ProtocolRequestHelper::PerformProtocolRequest(
     std::unique_ptr<HttpRequest> request, InterruptibleRunner& runner) {
   std::vector<std::unique_ptr<HttpRequest>> requests;
   requests.push_back(std::move(request));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> response,
       PerformMultipleProtocolRequests(std::move(requests), runner));
   return std::move(response[0]);
@@ -335,7 +335,7 @@ ProtocolRequestHelper::PerformMultipleProtocolRequests(
   std::vector<absl::StatusOr<InMemoryHttpResponse>> responses;
   {
     auto started_stopwatch = network_stopwatch_.Start();
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         responses, PerformMultipleRequestsInMemoryWithRetry(
                        http_client_, runner, std::move(requests),
                        &bytes_downloaded_, &bytes_uploaded_, &clock_, &bit_gen_,
@@ -366,20 +366,20 @@ ProtocolRequestHelper::PollOperationResponseUntilDone(
       return std::move(response_operation_proto);
     }
 
-    FCP_ASSIGN_OR_RETURN(std::string operation_name,
-                         ExtractOperationName(response_operation_proto));
+    ABSL_ASSIGN_OR_RETURN(std::string operation_name,
+                          ExtractOperationName(response_operation_proto));
 
     // Wait for server returned polling interval before sending next request.
     clock_.Sleep(GetPollingInterval(response_operation_proto));
     // The response Operation indicates that the result isn't ready yet. Poll
     // again.
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         std::unique_ptr<HttpRequest> get_operation_request,
         request_creator.CreateGetOperationRequest(operation_name));
     absl::StatusOr<InMemoryHttpResponse> http_response =
         PerformProtocolRequest(std::move(get_operation_request), runner);
-    FCP_ASSIGN_OR_RETURN(response_operation_proto,
-                         ParseOperationProtoFromHttpResponse(http_response));
+    ABSL_ASSIGN_OR_RETURN(response_operation_proto,
+                          ParseOperationProtoFromHttpResponse(http_response));
   }
 }
 
@@ -387,7 +387,7 @@ absl::StatusOr<InMemoryHttpResponse> ProtocolRequestHelper::CancelOperation(
     absl::string_view operation_name,
     const ProtocolRequestCreator& request_creator,
     InterruptibleRunner& runner) {
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> cancel_operation_request,
       request_creator.CreateCancelOperationRequest(operation_name));
   return PerformProtocolRequest(std::move(cancel_operation_request), runner);
@@ -396,7 +396,7 @@ absl::StatusOr<InMemoryHttpResponse> ProtocolRequestHelper::CancelOperation(
 absl::StatusOr<Operation> ParseOperationProtoFromHttpResponse(
     absl::StatusOr<InMemoryHttpResponse> http_response) {
   // If the HTTP response indicates an error then return that error.
-  FCP_RETURN_IF_ERROR(http_response);
+  ABSL_RETURN_IF_ERROR(http_response.status());
   Operation response_operation_proto;
   // Parse the response.
   if (!response_operation_proto.ParseFromString(http_response->body)) {

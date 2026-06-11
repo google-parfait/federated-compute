@@ -31,7 +31,6 @@ cc_library(
     deps = [
         ":rekor",
         ":signatures",
-        "//fcp/base",
         "//fcp/protos/confidentialcompute:access_policy_endorsement_options_cc_proto",
         "//fcp/protos/confidentialcompute:key_cc_proto",
         "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
@@ -39,6 +38,7 @@ cc_library(
         "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
@@ -78,7 +78,6 @@ cc_library(
     hdrs = ["rekor.h"],
     deps = [
         ":signatures",
-        "//fcp/base",
         "//fcp/protos/confidentialcompute:key_cc_proto",
         "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
         "@boringssl//:crypto",
@@ -88,6 +87,7 @@ cc_library(
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/numeric:bits",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",

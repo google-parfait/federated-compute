@@ -23,7 +23,6 @@
 #include <utility>
 
 #include "absl/status/status.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/secagg_server_r3_unmasking_state.h"
 
 namespace fcp {
@@ -47,8 +46,8 @@ SecAggServerR2MaskedInputCollState::~SecAggServerR2MaskedInputCollState() =
 
 absl::Status SecAggServerR2MaskedInputCollState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {
-  return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
-         << "Call to deprecated HandleMessage method.";
+  return absl::FailedPreconditionError(
+      "Call to deprecated HandleMessage method.");
 }
 
 absl::Status SecAggServerR2MaskedInputCollState::HandleMessage(
@@ -139,7 +138,7 @@ void SecAggServerR2MaskedInputCollState::HandleAbort() {
 absl::StatusOr<std::unique_ptr<SecAggServerState>>
 SecAggServerR2MaskedInputCollState::ProceedToNextRound() {
   if (!ReadyForNextRound()) {
-    return FCP_STATUS(absl::StatusCode::kUnavailable);
+    return absl::UnavailableError("");
   }
   if (needs_to_abort_) {
     std::string error_string = "Too many clients aborted.";

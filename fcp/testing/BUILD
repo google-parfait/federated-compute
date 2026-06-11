@@ -98,7 +98,6 @@ cc_test(
     deps = [
         ":result_matchers",
         ":tracing",
-        "//fcp/base",
         "//fcp/base:error",
         "//fcp/base:meta",
         "//fcp/base:result",

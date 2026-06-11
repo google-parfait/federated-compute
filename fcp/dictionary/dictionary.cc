@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/status/status_macros.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/dictionary/dictionary.pb.h"
 #include "absl/container/node_hash_map.h"
@@ -161,7 +162,7 @@ absl::StatusOr<std::unique_ptr<Dictionary>> Dictionary::Create(
         "Cannot create a dictionary that does not have vocabulary set");
   }
   // Make sure output blocklist IDs are sorted in ascending order and unique.
-  FCP_RETURN_IF_ERROR(IsOutputBlocklistIdsSortedAndUnique(description));
+  ABSL_RETURN_IF_ERROR(IsOutputBlocklistIdsSortedAndUnique(description));
 
   if (description.vocabulary().has_index()) {
     auto bimap = std::make_unique<HashVectorBimap>();

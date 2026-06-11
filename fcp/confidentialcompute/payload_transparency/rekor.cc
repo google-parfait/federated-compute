@@ -27,13 +27,13 @@
 #include "absl/functional/function_ref.h"
 #include "absl/numeric/bits.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/confidentialcompute/payload_transparency/signatures.h"
 #include "fcp/protos/confidentialcompute/key.pb.h"
 #include "fcp/protos/confidentialcompute/payload_transparency.pb.h"
@@ -216,10 +216,10 @@ absl::Status VerifyRekorLogEntry(const RekorLogEntry& log_entry,
   }
 
   // Extract important fields from the log entry.
-  FCP_ASSIGN_OR_RETURN(std::string data_hash,
-                       ExtractDataHash(log_entry.body()));
-  FCP_ASSIGN_OR_RETURN(std::string signature,
-                       ExtractSignature(log_entry.body()));
+  ABSL_ASSIGN_OR_RETURN(std::string data_hash,
+                        ExtractDataHash(log_entry.body()));
+  ABSL_ASSIGN_OR_RETURN(std::string signature,
+                        ExtractSignature(log_entry.body()));
 
   // Verify that the log entry's data hash matches the payload.
   absl::FixedArray<uint8_t> digest = ComputeDigest(EVP_sha256(), signed_data);
@@ -241,7 +241,7 @@ absl::Status VerifyRekorLogEntry(const RekorLogEntry& log_entry,
   }
 
   // Verify the inclusion proof.
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       absl::FixedArray<uint8_t> root_hash,
       ComputeRootHash(log_entry.body(), log_entry.log_index(),
                       log_entry.tree_size(), log_entry.hashes()));

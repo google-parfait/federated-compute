@@ -26,6 +26,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/container/node_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/status_builder.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/secagg_server_aborted_state.h"
@@ -100,11 +101,11 @@ absl::Status SecAggServerState::HandleMessage(
   MessageReceived(message, false);
   if (message.message_content_case() ==
       ClientToServerWrapperMessage::MESSAGE_CONTENT_NOT_SET) {
-    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
+    return absl::StatusBuilder(absl::StatusCode::kFailedPrecondition)
            << "Server received a message of unknown type from client "
            << client_id << " but was in state " << StateName();
   } else {
-    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
+    return absl::StatusBuilder(absl::StatusCode::kFailedPrecondition)
            << "Server received a message of type "
            << message.message_content_case() << " from client " << client_id
            << " but was in state " << StateName();
@@ -118,7 +119,7 @@ absl::Status SecAggServerState::HandleMessage(
 
 absl::StatusOr<std::unique_ptr<SecAggServerState>>
 SecAggServerState::ProceedToNextRound() {
-  return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
+  return absl::StatusBuilder(absl::StatusCode::kFailedPrecondition)
          << "The server cannot proceed to next round from state "
          << StateName();
 }
@@ -196,7 +197,7 @@ std::unique_ptr<SecAggServerState> SecAggServerState::Abort(
 }
 
 absl::StatusOr<std::string> SecAggServerState::ErrorMessage() const {
-  return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
+  return absl::StatusBuilder(absl::StatusCode::kFailedPrecondition)
          << "Error message requested, but server is in state " << StateName();
 }
 
@@ -246,7 +247,7 @@ bool SecAggServerState::SetAsyncCallback(std::function<void()> async_callback) {
 }
 
 absl::StatusOr<std::unique_ptr<SecAggVectorMap>> SecAggServerState::Result() {
-  return FCP_STATUS(absl::StatusCode::kUnavailable)
+  return absl::StatusBuilder(absl::StatusCode::kUnavailable)
          << "Result requested, but server is in state " << StateName();
 }
 

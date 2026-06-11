@@ -21,9 +21,9 @@
 #include "google/type/date.pb.h"
 #include "google/type/timeofday.pb.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/time/civil_time.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
 
 namespace fcp {
@@ -149,8 +149,8 @@ absl::StatusOr<absl::CivilSecond> GetTimeWindowStart(
 
 absl::StatusOr<absl::CivilSecond> ConvertEventTimeToCivilSecond(
     absl::string_view event_time) {
-  FCP_ASSIGN_OR_RETURN(std::string event_time_without_timezone,
-                       RemoveTimezoneFromEventTime(event_time));
+  ABSL_ASSIGN_OR_RETURN(std::string event_time_without_timezone,
+                        RemoveTimezoneFromEventTime(event_time));
   absl::CivilSecond event_civil_second;
   if (!absl::ParseCivilTime(event_time_without_timezone, &event_civil_second)) {
     return absl::InvalidArgumentError("Invalid event time format");

@@ -34,6 +34,7 @@
 #include "absl/functional/any_invocable.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/match.h"
@@ -126,8 +127,8 @@ absl::StatusOr<ComputationResults> CreateComputationResults(
   } else if (!checkpoint_filename.empty()) {
     // Name of the TF checkpoint inside the aggregand map in the Checkpoint
     // protobuf. This field name is ignored by the server.
-    FCP_ASSIGN_OR_RETURN(std::string tf_checkpoint,
-                         fcp::ReadFileToString(checkpoint_filename));
+    ABSL_ASSIGN_OR_RETURN(std::string tf_checkpoint,
+                          fcp::ReadFileToString(checkpoint_filename));
     computation_results[std::string(kTensorflowCheckpointAggregand)] =
         std::move(tf_checkpoint);
   } else {
@@ -550,7 +551,7 @@ absl::Status ReportPlanResult(
                                 /*fedselect_manager=*/nullptr);
   absl::Status result = absl::InternalError("");
   if (computation_results.ok()) {
-    FCP_RETURN_IF_ERROR(phase_logger.LogResultUploadStarted());
+    ABSL_RETURN_IF_ERROR(phase_logger.LogResultUploadStarted());
     ReportResult report_result = federated_protocol->ReportCompleted(
         std::move(*computation_results),
         /*plan_duration=*/absl::Now() - run_plan_start_time, task_identifier);
@@ -564,7 +565,7 @@ absl::Status ReportPlanResult(
                              before_report_stats),
         before_report_time, reference_time);
   } else {
-    FCP_RETURN_IF_ERROR(phase_logger.LogFailureUploadStarted());
+    ABSL_RETURN_IF_ERROR(phase_logger.LogFailureUploadStarted());
     engine::PhaseOutcome phase_outcome = engine::PhaseOutcome::ERROR;
     if (absl::IsFailedPrecondition(computation_results.status())) {
       phase_outcome = engine::PhaseOutcome::INSUFFICIENT_DATA;
@@ -588,8 +589,8 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
     Files* files, const absl::Cord& checkpoint) {
   // Create the temporary checkpoint file.
   // Deletion of the file is left to the caller / the Files implementation.
-  FCP_ASSIGN_OR_RETURN(absl::StatusOr<std::string> filename,
-                       files->CreateTempFile("init", ".ckp"));
+  ABSL_ASSIGN_OR_RETURN(absl::StatusOr<std::string> filename,
+                        files->CreateTempFile("init", ".ckp"));
   // Write the checkpoint data to the file.
   std::fstream checkpoint_stream(*filename, std::ios_base::out);
   if (!(checkpoint_stream << checkpoint).good()) {
@@ -605,10 +606,10 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> ComputeNativeEligibility(
     OpStatsLogger* opstats_logger, Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     EetPlanRunner& eet_plan_runner, const Flags* flags) {
-  FCP_ASSIGN_OR_RETURN(opstats::OpStatsSequence opstats_sequence,
-                       opstats_logger->GetOpStatsDb()->Read());
+  ABSL_ASSIGN_OR_RETURN(opstats::OpStatsSequence opstats_sequence,
+                        opstats_logger->GetOpStatsDb()->Read());
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       TaskEligibilityInfo task_eligibility_info,
       ComputeEligibility(population_eligibility_spec, log_manager, phase_logger,
                          opstats_sequence, clock, example_iterator_factories,
@@ -1702,14 +1703,14 @@ std::vector<std::string> HandleMultipleTaskAssignments(
 
 absl::StatusOr<std::string> GetOrCreateSourceIdSeed(
     OpStatsLogger* opstats_logger) {
-  FCP_ASSIGN_OR_RETURN(opstats::OpStatsSequence opstats_sequence,
-                       opstats_logger->GetOpStatsDb()->Read());
+  ABSL_ASSIGN_OR_RETURN(opstats::OpStatsSequence opstats_sequence,
+                        opstats_logger->GetOpStatsDb()->Read());
   if (opstats_sequence.has_source_id_seed()) {
     return opstats_sequence.source_id_seed().salt();
   }
   // If the SourceIdSeed is not set, then create it.
   std::string salt = fcp::RandomToken::Generate().ToString();
-  FCP_RETURN_IF_ERROR(opstats_logger->GetOpStatsDb()->Transform(
+  ABSL_RETURN_IF_ERROR(opstats_logger->GetOpStatsDb()->Transform(
       [salt](opstats::OpStatsSequence& opstats_sequence) {
         opstats_sequence.mutable_source_id_seed()->set_salt(salt);
       }));
@@ -1908,14 +1909,14 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   std::optional<std::string> source_id_seed = std::nullopt;
   if (flags->enable_privacy_id_generation()) {
-    FCP_ASSIGN_OR_RETURN(source_id_seed,
-                         GetOrCreateSourceIdSeed(opstats_logger));
+    ABSL_ASSIGN_OR_RETURN(source_id_seed,
+                          GetOrCreateSourceIdSeed(opstats_logger));
   }
 
   std::optional<std::string> attestation_measurement = std::nullopt;
-  FCP_ASSIGN_OR_RETURN(attestation_measurement,
-                       env_deps->GetAttestationMeasurement(
-                           eligibility_eval_result->content_binding));
+  ABSL_ASSIGN_OR_RETURN(attestation_measurement,
+                        env_deps->GetAttestationMeasurement(
+                            eligibility_eval_result->content_binding));
 
   size_t expected_num_tasks = 0;
   std::vector<std::string> successful_task_names;

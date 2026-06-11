@@ -33,6 +33,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/escaping.h"
@@ -139,8 +140,8 @@ absl::StatusOr<std::string> CreateRequestEligibilityEvalTaskUriSuffix(
     absl::string_view population_name) {
   constexpr absl::string_view kRequestEligibilityEvalTaskUriSuffix =
       "/v1/eligibilityevaltasks/$0:request";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
-                       EncodeUriSinglePathSegment(population_name));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                        EncodeUriSinglePathSegment(population_name));
   return absl::Substitute(kRequestEligibilityEvalTaskUriSuffix,
                           encoded_population_name);
 }
@@ -151,10 +152,10 @@ absl::StatusOr<std::string> CreateReportEligibilityEvalTaskResultUriSuffix(
     absl::string_view population_name, absl::string_view session_id) {
   constexpr absl::string_view kReportEligibilityEvalTaskResultUriSuffix =
       "/v1/populations/$0/eligibilityevaltasks/$1:reportresult";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
-                       EncodeUriSinglePathSegment(population_name));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
-                       EncodeUriSinglePathSegment(session_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                        EncodeUriSinglePathSegment(population_name));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_session_id,
+                        EncodeUriSinglePathSegment(session_id));
   return absl::Substitute(kReportEligibilityEvalTaskResultUriSuffix,
                           encoded_population_name, encoded_session_id);
 }
@@ -164,10 +165,10 @@ absl::StatusOr<std::string> CreateStartTaskAssignmentUriSuffix(
     absl::string_view population_name, absl::string_view session_id) {
   constexpr absl::string_view kStartTaskAssignmentUriSuffix =
       "/v1/populations/$0/taskassignments/$1:start";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
-                       EncodeUriSinglePathSegment(population_name));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
-                       EncodeUriSinglePathSegment(session_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                        EncodeUriSinglePathSegment(population_name));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_session_id,
+                        EncodeUriSinglePathSegment(session_id));
   return absl::Substitute(kStartTaskAssignmentUriSuffix,
                           encoded_population_name, encoded_session_id);
 }
@@ -177,10 +178,10 @@ absl::StatusOr<std::string> CreateReportTaskResultUriSuffix(
     absl::string_view population_name, absl::string_view session_id) {
   constexpr absl::string_view pattern =
       "/v1/populations/$0/taskassignments/$1:reportresult";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
-                       EncodeUriSinglePathSegment(population_name));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
-                       EncodeUriSinglePathSegment(session_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                        EncodeUriSinglePathSegment(population_name));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_session_id,
+                        EncodeUriSinglePathSegment(session_id));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_population_name, encoded_session_id);
 }
@@ -189,10 +190,10 @@ absl::StatusOr<std::string> CreatePerformMultipleTaskAssignmentsRequestSuffix(
     absl::string_view population_name, absl::string_view session_id) {
   constexpr absl::string_view pattern =
       "/v1/populations/$0/taskassignments/$1:performmultiple";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
-                       EncodeUriSinglePathSegment(population_name));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
-                       EncodeUriSinglePathSegment(session_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                        EncodeUriSinglePathSegment(population_name));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_session_id,
+                        EncodeUriSinglePathSegment(session_id));
   return absl::Substitute(pattern, encoded_population_name, encoded_session_id);
 }
 
@@ -200,10 +201,10 @@ absl::StatusOr<std::string> CreateStartAggregationDataUploadUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern =
       "/v1/aggregations/$0/clients/$1:startdataupload";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -214,10 +215,10 @@ CreateStartConfidentialAggregationDataUploadUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern =
       "/v1/confidentialaggregations/$0/clients/$1:startdataupload";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -226,10 +227,10 @@ CreateStartConfidentialAggregationDataUploadUriSuffix(
 absl::StatusOr<std::string> CreateSubmitAggregationResultUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern = "/v1/aggregations/$0/clients/$1:submit";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -239,10 +240,10 @@ absl::StatusOr<std::string> CreateSubmitConfidentialAggregationResultUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern =
       "/v1/confidentialaggregations/$0/clients/$1:submit";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -251,10 +252,10 @@ absl::StatusOr<std::string> CreateSubmitConfidentialAggregationResultUriSuffix(
 absl::StatusOr<std::string> CreateAbortAggregationUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern = "/v1/aggregations/$0/clients/$1:abort";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -264,10 +265,10 @@ absl::StatusOr<std::string> CreateAbortConfidentialAggregationUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern =
       "/v1/confidentialaggregations/$0/clients/$1:abort";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -277,10 +278,10 @@ absl::StatusOr<std::string> CreateStartSecureAggregationUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern =
       "/v1/secureaggregations/$0/clients/$1:start";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -505,10 +506,10 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   request.mutable_eligibility_eval_task_capabilities()
       ->set_supports_native_eets(true);
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::string uri_suffix,
       CreateRequestEligibilityEvalTaskUriSuffix(population_name_));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       eligibility_eval_request_creator_->CreateProtocolRequest(
           uri_suffix, {}, HttpRequest::Method::kPost,
@@ -566,14 +567,14 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
 
   pre_task_assignment_session_id_ = response_proto.session_id();
   if (flags_->enable_relative_uri_prefix()) {
-    FCP_RETURN_IF_ERROR(
+    ABSL_RETURN_IF_ERROR(
         GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
             most_recent_forwarding_prefix_,
             response_proto.mutable_task_assignment_forwarding_info(),
             /*should_update_most_recent_forwarding_prefix=*/true));
   }
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       task_assignment_request_creator_,
       ProtocolRequestCreator::Create(
           api_key_, response_proto.task_assignment_forwarding_info(),
@@ -587,7 +588,7 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
       payload_uris_received_callback(result);
 
       if (task.has_population_eligibility_spec()) {
-        FCP_ASSIGN_OR_RETURN(
+        ABSL_ASSIGN_OR_RETURN(
             PopulationEligibilitySpec population_eligibility_spec,
             FetchProtoResource<PopulationEligibilitySpec>(
                 task.population_eligibility_spec(),
@@ -623,7 +624,7 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
           !IsResourceEmpty(task.init_checkpoint())) {
         // If set, fetch the eligibility eval task resources, returning any
         // errors that may be encountered in the process.
-        FCP_ASSIGN_OR_RETURN(
+        ABSL_ASSIGN_OR_RETURN(
             std::vector<absl::StatusOr<FetchedTaskResources>> task_resources,
             FetchTaskResources({TaskResources{
                 .plan = task.plan(),
@@ -659,9 +660,9 @@ HttpFederatedProtocol::CreateReportEligibilityEvalTaskResultRequest(
     absl::Status status) {
   ReportEligibilityEvalTaskResultRequest request;
   request.set_status_code(static_cast<google::rpc::Code>(status.code()));
-  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
-                       CreateReportEligibilityEvalTaskResultUriSuffix(
-                           population_name_, pre_task_assignment_session_id_));
+  ABSL_ASSIGN_OR_RETURN(std::string uri_suffix,
+                        CreateReportEligibilityEvalTaskResultUriSuffix(
+                            population_name_, pre_task_assignment_session_id_));
   return eligibility_eval_request_creator_->CreateProtocolRequest(
       uri_suffix, QueryParams(), HttpRequest::Method::kPost,
       request.SerializeAsString(),
@@ -678,7 +679,7 @@ void HttpFederatedProtocol::ReportEligibilityEvalError(
 
 absl::Status HttpFederatedProtocol::ReportEligibilityEvalErrorInternal(
     absl::Status error_status) {
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> request,
       CreateReportEligibilityEvalTaskResultRequest(error_status));
   return protocol_request_helper_
@@ -760,10 +761,10 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   std::vector<std::unique_ptr<HttpRequest>> requests;
 
   // Construct the URI suffix.
-  FCP_ASSIGN_OR_RETURN(std::string task_assignment_uri_suffix,
-                       CreateStartTaskAssignmentUriSuffix(
-                           population_name_, pre_task_assignment_session_id_));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(std::string task_assignment_uri_suffix,
+                        CreateStartTaskAssignmentUriSuffix(
+                            population_name_, pre_task_assignment_session_id_));
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> task_assignment_http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
           task_assignment_uri_suffix, {}, HttpRequest::Method::kPost,
@@ -771,7 +772,7 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   requests.push_back(std::move(task_assignment_http_request));
 
   if (eligibility_eval_enabled_ && !report_eligibility_eval_result_called_) {
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         std::unique_ptr<HttpRequest>
             report_eligibility_eval_result_http_request,
         CreateReportEligibilityEvalTaskResultRequest(absl::OkStatus()));
@@ -780,7 +781,7 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   }
 
   // Issue the request.
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
       protocol_request_helper_.PerformMultipleProtocolRequests(
           std::move(requests), *interruptible_runner_));
@@ -818,8 +819,8 @@ HttpFederatedProtocol::HandleTaskAssignmentOperationResponse(
     // but add a prefix to the error message to ensure we can easily distinguish
     // an HTTP error occurring in response to the protocol request from HTTP
     // errors occurring during checkpoint/plan resource fetch requests later on.
-    FCP_ASSIGN_OR_RETURN(std::string operation_name,
-                         ExtractOperationName(*initial_operation));
+    ABSL_ASSIGN_OR_RETURN(std::string operation_name,
+                          ExtractOperationName(*initial_operation));
     // Client interruption
     std::unique_ptr<InterruptibleRunner> cancellation_runner =
         CreateDelayedInterruptibleRunner(
@@ -878,7 +879,7 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
 
   // Fetch the task resources, returning any errors that may be encountered in
   // the process. Returns an error or a vector of length 1.
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       auto task_resources_vec,
       FetchTaskResources({TaskResources{
           .plan = task_assignment.plan(),
@@ -895,9 +896,9 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
     return task_resources.status();
   }
   result.payloads = task_resources->plan_and_checkpoint_payloads;
-  FCP_ASSIGN_OR_RETURN(default_task_info_,
-                       CreatePerTaskInfoFromTaskAssignment(
-                           task_assignment, ObjectState::kCheckinAccepted));
+  ABSL_ASSIGN_OR_RETURN(default_task_info_,
+                        CreatePerTaskInfoFromTaskAssignment(
+                            task_assignment, ObjectState::kCheckinAccepted));
 
   if (result.confidential_agg_info.has_value()) {
     result.confidential_agg_info->data_access_policy =
@@ -972,17 +973,18 @@ HttpFederatedProtocol::CreatePerTaskInfoFromTaskAssignment(
   if (flags_->enable_relative_uri_prefix()) {
     ForwardingInfo aggregation_data_forwarding_info =
         task_assignment.aggregation_data_forwarding_info();
-    FCP_RETURN_IF_ERROR(
+    ABSL_RETURN_IF_ERROR(
         GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
             most_recent_forwarding_prefix_, &aggregation_data_forwarding_info,
             /*should_update_most_recent_forwarding_prefix=*/true));
 
-    FCP_ASSIGN_OR_RETURN(task_info.aggregation_request_creator,
-                         ProtocolRequestCreator::Create(
-                             api_key_, aggregation_data_forwarding_info,
-                             !flags_->disable_http_request_body_compression()));
+    ABSL_ASSIGN_OR_RETURN(
+        task_info.aggregation_request_creator,
+        ProtocolRequestCreator::Create(
+            api_key_, aggregation_data_forwarding_info,
+            !flags_->disable_http_request_body_compression()));
   } else {
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         task_info.aggregation_request_creator,
         ProtocolRequestCreator::Create(
             api_key_, task_assignment.aggregation_data_forwarding_info(),
@@ -1099,10 +1101,10 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   std::vector<std::unique_ptr<HttpRequest>> requests;
 
   // Construct the URI suffix.
-  FCP_ASSIGN_OR_RETURN(std::string multiple_task_assignments_uri_suffix,
-                       CreatePerformMultipleTaskAssignmentsRequestSuffix(
-                           population_name_, pre_task_assignment_session_id_));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(std::string multiple_task_assignments_uri_suffix,
+                        CreatePerformMultipleTaskAssignmentsRequestSuffix(
+                            population_name_, pre_task_assignment_session_id_));
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> multiple_task_assignments_http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
           multiple_task_assignments_uri_suffix, {}, HttpRequest::Method::kPost,
@@ -1113,7 +1115,7 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   // the server for task assignment, and hence we don't need to check whether
   // ReportEligibilityEvalResult has been called.
   if (eligibility_eval_enabled_) {
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         std::unique_ptr<HttpRequest>
             report_eligibility_eval_result_http_request,
         CreateReportEligibilityEvalTaskResultRequest(absl::OkStatus()));
@@ -1122,7 +1124,7 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   }
 
   // Issue the request.
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
       protocol_request_helper_.PerformMultipleProtocolRequests(
           std::move(requests), *interruptible_runner_));
@@ -1196,8 +1198,8 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
     return result;
   }
 
-  FCP_ASSIGN_OR_RETURN(auto plan_and_checkpoint_payloads,
-                       FetchTaskResources(resources_to_fetch));
+  ABSL_ASSIGN_OR_RETURN(auto plan_and_checkpoint_payloads,
+                        FetchTaskResources(resources_to_fetch));
 
   // Once all the resources have been fetched, iterate over the task assignments
   // and the resource responses, in the same order that the resource requests
@@ -1445,7 +1447,7 @@ absl::Status HttpFederatedProtocol::UploadResult(
   std::string serialized_blob_header = "";
 
   if (task_info.aggregation_type == AggregationType::kConfidentialAggregation) {
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         attestation::AttestationVerifier::VerificationResult attestation_result,
         ValidateConfidentialEncryptionConfig(task_info, per_upload_info));
     // This is pulled out here because depending on the
@@ -1462,14 +1464,14 @@ absl::Status HttpFederatedProtocol::UploadResult(
     }
     serialized_blob_header = blob_header.SerializeAsString();
 
-    FCP_ASSIGN_OR_RETURN(data_to_upload,
-                         EncryptPayloadForConfidentialAggregation(
-                             task_info, attestation_result.public_key, result,
-                             serialized_blob_header, per_upload_info));
+    ABSL_ASSIGN_OR_RETURN(data_to_upload,
+                          EncryptPayloadForConfidentialAggregation(
+                              task_info, attestation_result.public_key, result,
+                              serialized_blob_header, per_upload_info));
 
   } else if (task_info.aggregation_type ==
              AggregationType::kWillowAggregation) {
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         data_to_upload,
         EncryptPayloadForWillowAggregation(task_info, result, per_upload_info));
   } else {
@@ -1502,15 +1504,15 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
   bool use_confidential_aggregation_service =
       task_info.aggregation_type == AggregationType::kConfidentialAggregation ||
       task_info.aggregation_type == AggregationType::kWillowAggregation;
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       ReportTaskResultRequest report_task_result_request,
       CreateReportTaskResultRequest(
           engine::PhaseOutcome::COMPLETED, plan_duration,
           task_info.aggregation_session_id, task_info.task_name));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::string report_task_result_uri_suffix,
       CreateReportTaskResultUriSuffix(population_name_, task_info.session_id));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_report_task_result_request,
       task_assignment_request_creator_->CreateProtocolRequest(
           report_task_result_uri_suffix, {}, HttpRequest::Method::kPost,
@@ -1527,19 +1529,19 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
   if (use_confidential_aggregation_service) {
     start_upload_request =
         StartConfidentialAggregationDataUploadRequest().SerializeAsString();
-    FCP_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
-                         CreateStartConfidentialAggregationDataUploadUriSuffix(
-                             task_info.aggregation_session_id,
-                             task_info.aggregation_authorization_token));
+    ABSL_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
+                          CreateStartConfidentialAggregationDataUploadUriSuffix(
+                              task_info.aggregation_session_id,
+                              task_info.aggregation_authorization_token));
   } else {
     start_upload_request =
         StartAggregationDataUploadRequest().SerializeAsString();
-    FCP_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
-                         CreateStartAggregationDataUploadUriSuffix(
-                             task_info.aggregation_session_id,
-                             task_info.aggregation_authorization_token));
+    ABSL_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
+                          CreateStartAggregationDataUploadUriSuffix(
+                              task_info.aggregation_session_id,
+                              task_info.aggregation_authorization_token));
   }
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_start_aggregation_data_upload_request,
       task_info.aggregation_request_creator->CreateProtocolRequest(
           start_aggregation_data_upload_uri_suffix, {},
@@ -1555,7 +1557,7 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
   std::vector<std::unique_ptr<HttpRequest>> requests;
   requests.push_back(std::move(http_start_aggregation_data_upload_request));
   requests.push_back(std::move(http_report_task_result_request));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
       protocol_request_helper_.PerformMultipleProtocolRequests(
           std::move(requests), *interruptible_runner_));
@@ -1585,15 +1587,15 @@ HttpFederatedProtocol::
   bool use_confidential_aggregation_service =
       task_info.aggregation_type == AggregationType::kConfidentialAggregation ||
       task_info.aggregation_type == AggregationType::kWillowAggregation;
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       ReportTaskResultRequest report_task_result_request,
       CreateReportTaskResultRequest(
           engine::PhaseOutcome::COMPLETED, plan_duration,
           task_info.aggregation_session_id, task_info.task_name));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::string report_task_result_uri_suffix,
       CreateReportTaskResultUriSuffix(population_name_, task_info.session_id));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_report_task_result_request,
       task_assignment_request_creator_->CreateProtocolRequest(
           report_task_result_uri_suffix, {}, HttpRequest::Method::kPost,
@@ -1610,17 +1612,17 @@ HttpFederatedProtocol::
   if (use_confidential_aggregation_service) {
     start_upload_request =
         StartConfidentialAggregationDataUploadRequest().SerializeAsString();
-    FCP_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
-                         CreateStartConfidentialAggregationDataUploadUriSuffix(
-                             task_info.aggregation_session_id,
-                             task_info.aggregation_authorization_token));
+    ABSL_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
+                          CreateStartConfidentialAggregationDataUploadUriSuffix(
+                              task_info.aggregation_session_id,
+                              task_info.aggregation_authorization_token));
   } else {
     start_upload_request =
         StartAggregationDataUploadRequest().SerializeAsString();
-    FCP_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
-                         CreateStartAggregationDataUploadUriSuffix(
-                             task_info.aggregation_session_id,
-                             task_info.aggregation_authorization_token));
+    ABSL_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
+                          CreateStartAggregationDataUploadUriSuffix(
+                              task_info.aggregation_session_id,
+                              task_info.aggregation_authorization_token));
   }
   std::vector<std::unique_ptr<HttpRequest>> requests;
   // One for the http_report_task_result_request and then one for each upload
@@ -1629,7 +1631,7 @@ HttpFederatedProtocol::
                 << http_report_task_result_request->uri();
   requests.push_back(std::move(http_report_task_result_request));
   for (int i = 0; i < num_data_uploads; ++i) {
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         std::unique_ptr<HttpRequest> http_start_aggregation_data_upload_request,
         task_info.aggregation_request_creator->CreateProtocolRequest(
             start_aggregation_data_upload_uri_suffix, {},
@@ -1642,7 +1644,7 @@ HttpFederatedProtocol::
                         ? "StartConfidentialAggregationDataUpload"
                         : "StartAggregationDataUpload")
                 << " request uri is : " << requests[0]->uri();
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
       protocol_request_helper_.PerformMultipleProtocolRequests(
           std::move(requests), *interruptible_runner_));
@@ -1731,12 +1733,12 @@ HttpFederatedProtocol::CreatePerUploadInfo(
     }
 
     if (flags_->enable_relative_uri_prefix()) {
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
               most_recent_forwarding_prefix_,
               response_proto.mutable_aggregation_protocol_forwarding_info(),
               /*should_update_most_recent_forwarding_prefix=*/false));
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
               most_recent_forwarding_prefix_,
               response_proto.mutable_resource()
@@ -1752,10 +1754,10 @@ HttpFederatedProtocol::CreatePerUploadInfo(
         response_proto.resource().resource_name();
     per_upload_info.aggregation_client_token = response_proto.client_token();
 
-    FCP_ASSIGN_OR_RETURN(confidential_encryption_config,
-                         FetchProtoResource<ConfidentialEncryptionConfig>(
-                             response_proto.encryption_config(),
-                             "ConfidentialEncryptionConfig"));
+    ABSL_ASSIGN_OR_RETURN(confidential_encryption_config,
+                          FetchProtoResource<ConfidentialEncryptionConfig>(
+                              response_proto.encryption_config(),
+                              "ConfidentialEncryptionConfig"));
     per_upload_info.confidential_encryption_config =
         std::move(confidential_encryption_config);
   } else {
@@ -1766,12 +1768,12 @@ HttpFederatedProtocol::CreatePerUploadInfo(
     }
 
     if (flags_->enable_relative_uri_prefix()) {
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
               most_recent_forwarding_prefix_,
               response_proto.mutable_aggregation_protocol_forwarding_info(),
               /*should_update_most_recent_forwarding_prefix=*/false));
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
               most_recent_forwarding_prefix_,
               response_proto.mutable_resource()
@@ -1795,11 +1797,11 @@ HttpFederatedProtocol::CreatePerUploadInfo(
   // Note that we reassign `aggregation_request_creator_` because from this
   // point onwards, subsequent aggregation protocol requests should go to the
   // endpoint identified in the aggregation_protocol_forwarding_info.
-  FCP_ASSIGN_OR_RETURN(per_upload_info.aggregation_request_creator,
-                       ProtocolRequestCreator::Create(
-                           api_key_, aggregation_protocol_forwarding_info,
-                           !flags_->disable_http_request_body_compression()));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(per_upload_info.aggregation_request_creator,
+                        ProtocolRequestCreator::Create(
+                            api_key_, aggregation_protocol_forwarding_info,
+                            !flags_->disable_http_request_body_compression()));
+  ABSL_ASSIGN_OR_RETURN(
       per_upload_info.data_upload_request_creator,
       ProtocolRequestCreator::Create(
           api_key_, data_upload_forwarding_info,
@@ -1926,15 +1928,15 @@ absl::Status HttpFederatedProtocol::UploadDataViaByteStreamProtocol(
     std::string tf_checkpoint, PerUploadInfo& per_upload_info,
     std::optional<absl::string_view> serialized_blob_header) {
   FCP_LOG(INFO) << "Uploading checkpoint with simple aggregation.";
-  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
-                       CreateByteStreamUploadUriSuffix(
-                           per_upload_info.aggregation_resource_name));
+  ABSL_ASSIGN_OR_RETURN(std::string uri_suffix,
+                        CreateByteStreamUploadUriSuffix(
+                            per_upload_info.aggregation_resource_name));
   HeaderList additional_headers;
   if (serialized_blob_header.has_value()) {
     additional_headers.push_back(
         {kBlobHeader, absl::WebSafeBase64Escape(*serialized_blob_header)});
   }
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       per_upload_info.data_upload_request_creator
           ->CreateProtocolRequestWithAdditionalHeaders(
@@ -1963,23 +1965,23 @@ absl::Status HttpFederatedProtocol::SubmitAggregationResult(
   std::string uri_suffix;
   std::string request_proto;
   if (confidential_aggregation) {
-    FCP_ASSIGN_OR_RETURN(uri_suffix,
-                         CreateSubmitConfidentialAggregationResultUriSuffix(
-                             task_info.aggregation_session_id,
-                             per_upload_info.aggregation_client_token));
+    ABSL_ASSIGN_OR_RETURN(uri_suffix,
+                          CreateSubmitConfidentialAggregationResultUriSuffix(
+                              task_info.aggregation_session_id,
+                              per_upload_info.aggregation_client_token));
     SubmitConfidentialAggregationResultRequest request;
     request.set_resource_name(per_upload_info.aggregation_resource_name);
     request_proto = request.SerializeAsString();
   } else {
-    FCP_ASSIGN_OR_RETURN(uri_suffix,
-                         CreateSubmitAggregationResultUriSuffix(
-                             task_info.aggregation_session_id,
-                             per_upload_info.aggregation_client_token));
+    ABSL_ASSIGN_OR_RETURN(uri_suffix,
+                          CreateSubmitAggregationResultUriSuffix(
+                              task_info.aggregation_session_id,
+                              per_upload_info.aggregation_client_token));
     SubmitAggregationResultRequest request;
     request.set_resource_name(per_upload_info.aggregation_resource_name);
     request_proto = request.SerializeAsString();
   }
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       per_upload_info.aggregation_request_creator->CreateProtocolRequest(
           uri_suffix, {}, HttpRequest::Method::kPost, request_proto,
@@ -2030,23 +2032,23 @@ absl::Status HttpFederatedProtocol::AbortAggregationInner(
   std::string uri_suffix;
   std::string request_proto;
   if (confidential_aggregation) {
-    FCP_ASSIGN_OR_RETURN(uri_suffix,
-                         CreateAbortConfidentialAggregationUriSuffix(
-                             task_info.aggregation_session_id,
-                             per_upload_info.aggregation_client_token));
+    ABSL_ASSIGN_OR_RETURN(uri_suffix,
+                          CreateAbortConfidentialAggregationUriSuffix(
+                              task_info.aggregation_session_id,
+                              per_upload_info.aggregation_client_token));
     AbortConfidentialAggregationRequest request;
     *request.mutable_status() = ConvertAbslStatusToRpcStatus(error_status);
     request_proto = request.SerializeAsString();
   } else {
-    FCP_ASSIGN_OR_RETURN(uri_suffix,
-                         CreateAbortAggregationUriSuffix(
-                             task_info.aggregation_session_id,
-                             per_upload_info.aggregation_client_token));
+    ABSL_ASSIGN_OR_RETURN(uri_suffix,
+                          CreateAbortAggregationUriSuffix(
+                              task_info.aggregation_session_id,
+                              per_upload_info.aggregation_client_token));
     AbortAggregationRequest request;
     *request.mutable_status() = ConvertAbslStatusToRpcStatus(error_status);
     request_proto = request.SerializeAsString();
   }
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       per_upload_info.aggregation_request_creator->CreateProtocolRequest(
           uri_suffix, {}, HttpRequest::Method::kPost, request_proto,
@@ -2063,7 +2065,7 @@ absl::Status HttpFederatedProtocol::AbortAggregationInner(
 absl::Status HttpFederatedProtocol::ReportViaMultiShotSecureAggregation(
     ComputationResults results, absl::Duration plan_duration,
     PerTaskInfo& task_info) {
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       StartSecureAggregationResponse response_proto,
       StartSecureAggregationAndReportTaskResult(plan_duration, task_info));
   SecureAggregationProtocolExecutionInfo protocol_execution_info =
@@ -2088,18 +2090,18 @@ absl::Status HttpFederatedProtocol::ReportViaMultiShotSecureAggregation(
   absl::StatusOr<secagg::ServerToClientWrapperMessage> server_response_holder;
 
   if (flags_->enable_relative_uri_prefix()) {
-    FCP_RETURN_IF_ERROR(
+    ABSL_RETURN_IF_ERROR(
         GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
             most_recent_forwarding_prefix_,
             response_proto.mutable_secagg_protocol_forwarding_info(),
             /*should_update_most_recent_forwarding_prefix=*/false));
-    FCP_RETURN_IF_ERROR(
+    ABSL_RETURN_IF_ERROR(
         GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
             most_recent_forwarding_prefix_,
             response_proto.mutable_masked_result_resource()
                 ->mutable_data_upload_forwarding_info(),
             /*should_update_most_recent_forwarding_prefix=*/false));
-    FCP_RETURN_IF_ERROR(
+    ABSL_RETURN_IF_ERROR(
         GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
             most_recent_forwarding_prefix_,
             response_proto.mutable_nonmasked_result_resource()
@@ -2107,7 +2109,7 @@ absl::Status HttpFederatedProtocol::ReportViaMultiShotSecureAggregation(
             /*should_update_most_recent_forwarding_prefix=*/false));
   }
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<SecAggSendToServerBase> send_to_server_impl,
       HttpSecAggSendToServerImpl::Create(
           api_key_, &clock_, &protocol_request_helper_,
@@ -2144,18 +2146,18 @@ absl::Status HttpFederatedProtocol::ReportViaMultiShotSecureAggregation(
           protocol_execution_info.expected_number_of_clients(),
           protocol_execution_info
               .minimum_surviving_clients_for_reconstruction());
-  FCP_RETURN_IF_ERROR(secagg_runner->Run(std::move(results)));
+  ABSL_RETURN_IF_ERROR(secagg_runner->Run(std::move(results)));
   return absl::OkStatus();
 }
 
 absl::StatusOr<StartSecureAggregationResponse>
 HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
     absl::Duration plan_duration, PerTaskInfo& task_info) {
-  FCP_ASSIGN_OR_RETURN(std::string start_secure_aggregation_uri_suffix,
-                       CreateStartSecureAggregationUriSuffix(
-                           task_info.aggregation_session_id,
-                           task_info.aggregation_authorization_token));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(std::string start_secure_aggregation_uri_suffix,
+                        CreateStartSecureAggregationUriSuffix(
+                            task_info.aggregation_session_id,
+                            task_info.aggregation_authorization_token));
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> start_secure_aggregation_http_request,
       task_info.aggregation_request_creator->CreateProtocolRequest(
           start_secure_aggregation_uri_suffix, QueryParams(),
@@ -2163,15 +2165,15 @@ HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
           StartSecureAggregationRequest::default_instance().SerializeAsString(),
           /*is_protobuf_encoded=*/true));
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::string report_task_result_uri_suffix,
       CreateReportTaskResultUriSuffix(population_name_, task_info.session_id));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       ReportTaskResultRequest report_task_result_request,
       CreateReportTaskResultRequest(
           engine::PhaseOutcome::COMPLETED, plan_duration,
           task_info.aggregation_session_id, task_info.task_name));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> report_task_result_http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
           report_task_result_uri_suffix, QueryParams(),
@@ -2183,7 +2185,7 @@ HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
   requests.push_back(std::move(start_secure_aggregation_http_request));
   requests.push_back(std::move(report_task_result_http_request));
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
       protocol_request_helper_.PerformMultipleProtocolRequests(
           std::move(requests), *interruptible_runner_));
@@ -2194,9 +2196,9 @@ HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
   if (!responses[1].ok()) {
     log_manager_->LogDiag(ProdDiagCode::HTTP_REPORT_TASK_RESULT_REQUEST_FAILED);
   }
-  FCP_ASSIGN_OR_RETURN(Operation initial_operation,
-                       ParseOperationProtoFromHttpResponse(responses[0]));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(Operation initial_operation,
+                        ParseOperationProtoFromHttpResponse(responses[0]));
+  ABSL_ASSIGN_OR_RETURN(
       Operation completed_operation,
       protocol_request_helper_.PollOperationResponseUntilDone(
           initial_operation, *task_info.aggregation_request_creator,
@@ -2235,16 +2237,16 @@ absl::Status HttpFederatedProtocol::ReportNotCompleted(
             task_info->state == ObjectState::kMultipleTaskAssignmentsAccepted)
       << "Invalid call sequence";
   task_info->state = ObjectState::kReportCalled;
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       ReportTaskResultRequest request,
       CreateReportTaskResultRequest(phase_outcome, plan_duration,
                                     task_info->aggregation_session_id,
                                     task_info->task_name));
   // Construct the URI suffix.
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::string uri_suffix,
       CreateReportTaskResultUriSuffix(population_name_, task_info->session_id));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
           uri_suffix, {}, HttpRequest::Method::kPost,
@@ -2402,7 +2404,7 @@ HttpFederatedProtocol::FetchTaskResources(
         flags_->http_retry_delay_ms());
   }
 
-  FCP_RETURN_IF_ERROR(resource_responses);
+  ABSL_RETURN_IF_ERROR(resource_responses.status());
   auto response_it = resource_responses->begin();
   for (auto& pending_result : results) {
     if (!pending_result.ok()) {
@@ -2489,8 +2491,8 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
 template <typename T>
 absl::StatusOr<T> HttpFederatedProtocol::FetchProtoResource(
     const Resource& resource, const absl::string_view readable_name) {
-  FCP_ASSIGN_OR_RETURN(UriOrInlineData uri_or_data,
-                       ConvertResourceToUriOrInlineData(resource));
+  ABSL_ASSIGN_OR_RETURN(UriOrInlineData uri_or_data,
+                        ConvertResourceToUriOrInlineData(resource));
 
   // Fetch the plan and init checkpoint resources if they need to be fetched
   // (using the inline data instead if available).
@@ -2504,7 +2506,7 @@ absl::StatusOr<T> HttpFederatedProtocol::FetchProtoResource(
         &bit_gen_, flags_->http_retry_max_attempts(),
         flags_->http_retry_delay_ms());
   }
-  FCP_RETURN_IF_ERROR(resource_responses);
+  ABSL_RETURN_IF_ERROR(resource_responses.status());
   auto& response = (*resource_responses)[0];
 
   // Note: we forward any error during the fetching of resources to the caller,

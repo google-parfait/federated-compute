@@ -22,7 +22,6 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/node_hash_map.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
 #include "fcp/secagg/shared/secagg_vector.h"
 #include "fcp/secagg/testing/mock_send_to_server_interface.h"

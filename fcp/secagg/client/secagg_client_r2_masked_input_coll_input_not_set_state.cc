@@ -133,9 +133,8 @@ absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR2MaskedInputCollInputNotSetState::SetInput(
     std::unique_ptr<SecAggVectorMap> input_map) {
   if (!ValidateInput(*input_map, *input_vector_specs_)) {
-    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
-           << "The input to SetInput does not match the "
-              "InputVectorSpecification.";
+    return absl::InvalidArgumentError(
+        "The input to SetInput does not match the InputVectorSpecification.");
   }
 
   return {std::make_unique<SecAggClientR2MaskedInputCollInputSetState>(

@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/strings/str_cat.h"
 #include "curl/curl.h"
 #include "curl/multi.h"
@@ -107,7 +108,7 @@ absl::Status CurlHttpClient::PerformRequests(
 
     auto http_request_handle =
         static_cast<CurlHttpRequestHandle*>(request_handle);
-    FCP_RETURN_IF_ERROR(
+    ABSL_RETURN_IF_ERROR(
         http_request_handle->AddToMulti(multi_handle.get(), callback));
   }
 

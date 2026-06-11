@@ -28,13 +28,13 @@
 #include "google/rpc/code.pb.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
 #include "fcp/client/http/in_memory_request_response.h"
@@ -65,10 +65,10 @@ absl::StatusOr<std::string> CreateAbortSecureAggregationUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern =
       "/v1/secureaggregations/$0/clients/$1:abort";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -78,10 +78,10 @@ absl::StatusOr<std::string> CreateAdvertiseKeysUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern =
       "/v1/secureaggregations/$0/clients/$1:advertisekeys";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -91,10 +91,10 @@ absl::StatusOr<std::string> CreateShareKeysUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern =
       "/v1/secureaggregations/$0/clients/$1:sharekeys";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -104,10 +104,10 @@ absl::StatusOr<std::string> CreateSubmitSecureAggregationResultUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern =
       "/v1/secureaggregations/$0/clients/$1:submit";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -117,10 +117,10 @@ absl::StatusOr<std::string> CreateUnmaskUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern =
       "/v1/secureaggregations/$0/clients/$1:unmask";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
-                       EncodeUriSinglePathSegment(aggregation_id));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
-                       EncodeUriSinglePathSegment(client_token));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                        EncodeUriSinglePathSegment(aggregation_id));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                        EncodeUriSinglePathSegment(client_token));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_aggregation_id,
                           encoded_client_token);
@@ -144,19 +144,19 @@ HttpSecAggSendToServerImpl::Create(
     std::optional<std::string> tf_checkpoint,
     bool disable_request_body_compression,
     absl::Duration waiting_period_for_cancellation) {
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<ProtocolRequestCreator> secagg_request_creator,
       ProtocolRequestCreator::Create(api_key, secagg_upload_forwarding_info,
                                      !disable_request_body_compression));
   // We don't use request body compression for resource upload.
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<ProtocolRequestCreator>
           masked_result_upload_request_creator,
       ProtocolRequestCreator::Create(
           api_key, masked_result_resource.data_upload_forwarding_info(),
           /*use_compression=*/false));
   // We don't use request body compression for resource upload.
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<ProtocolRequestCreator>
           nonmasked_result_upload_request_creator,
       ProtocolRequestCreator::Create(
@@ -219,7 +219,7 @@ void HttpSecAggSendToServerImpl::Send(
 absl::StatusOr<secagg::ServerToClientWrapperMessage>
 HttpSecAggSendToServerImpl::AbortSecureAggregation(
     secagg::AbortMessage abort_message) {
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::string uri_suffix,
       CreateAbortSecureAggregationUriSuffix(aggregation_id_, client_token_));
 
@@ -228,7 +228,7 @@ HttpSecAggSendToServerImpl::AbortSecureAggregation(
   status->set_code(google::rpc::Code::INTERNAL);
   status->set_message(abort_message.diagnostic_info());
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       secagg_request_creator_->CreateProtocolRequest(
           uri_suffix, QueryParams(), HttpRequest::Method::kPost,
@@ -237,7 +237,7 @@ HttpSecAggSendToServerImpl::AbortSecureAggregation(
   std::unique_ptr<InterruptibleRunner> delayed_interruptible_runner =
       delayed_interruptible_runner_creator_(clock_.Now() +
                                             waiting_period_for_cancellation_);
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       InMemoryHttpResponse response,
       request_helper_.PerformProtocolRequest(std::move(http_request),
                                              *delayed_interruptible_runner));
@@ -250,25 +250,25 @@ HttpSecAggSendToServerImpl::AbortSecureAggregation(
 absl::StatusOr<secagg::ServerToClientWrapperMessage>
 HttpSecAggSendToServerImpl::DoR0AdvertiseKeys(
     secagg::AdvertiseKeys advertise_keys) {
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::string uri_suffix,
       CreateAdvertiseKeysUriSuffix(aggregation_id_, client_token_));
 
   AdvertiseKeysRequest request;
   *request.mutable_advertise_keys() = advertise_keys;
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       secagg_request_creator_->CreateProtocolRequest(
           uri_suffix, QueryParams(), HttpRequest::Method::kPost,
           request.SerializeAsString(),
           /*is_protobuf_encoded=*/true));
-  FCP_ASSIGN_OR_RETURN(InMemoryHttpResponse response,
-                       request_helper_.PerformProtocolRequest(
-                           std::move(http_request), interruptible_runner_));
-  FCP_ASSIGN_OR_RETURN(Operation initial_operation,
-                       ParseOperationProtoFromHttpResponse(response));
+  ABSL_ASSIGN_OR_RETURN(InMemoryHttpResponse response,
+                        request_helper_.PerformProtocolRequest(
+                            std::move(http_request), interruptible_runner_));
+  ABSL_ASSIGN_OR_RETURN(Operation initial_operation,
+                        ParseOperationProtoFromHttpResponse(response));
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       Operation completed_operation,
       request_helper_.PollOperationResponseUntilDone(
           initial_operation, *secagg_request_creator_, interruptible_runner_));
@@ -291,26 +291,26 @@ HttpSecAggSendToServerImpl::DoR0AdvertiseKeys(
 absl::StatusOr<secagg::ServerToClientWrapperMessage>
 HttpSecAggSendToServerImpl::DoR1ShareKeys(
     secagg::ShareKeysResponse share_keys_response) {
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::string uri_suffix,
       CreateShareKeysUriSuffix(aggregation_id_, client_token_));
 
   ShareKeysRequest request;
   *request.mutable_share_keys_client_response() = share_keys_response;
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       secagg_request_creator_->CreateProtocolRequest(
           uri_suffix, QueryParams(), HttpRequest::Method::kPost,
           request.SerializeAsString(),
           /*is_protobuf_encoded=*/true));
 
-  FCP_ASSIGN_OR_RETURN(InMemoryHttpResponse response,
-                       request_helper_.PerformProtocolRequest(
-                           std::move(http_request), interruptible_runner_));
-  FCP_ASSIGN_OR_RETURN(Operation initial_operation,
-                       ParseOperationProtoFromHttpResponse(response));
+  ABSL_ASSIGN_OR_RETURN(InMemoryHttpResponse response,
+                        request_helper_.PerformProtocolRequest(
+                            std::move(http_request), interruptible_runner_));
+  ABSL_ASSIGN_OR_RETURN(Operation initial_operation,
+                        ParseOperationProtoFromHttpResponse(response));
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       Operation completed_operation,
       request_helper_.PollOperationResponseUntilDone(
           initial_operation, *secagg_request_creator_, interruptible_runner_));
@@ -335,10 +335,10 @@ absl::StatusOr<secagg::ServerToClientWrapperMessage>
 HttpSecAggSendToServerImpl::DoR2SubmitSecureAggregationResult(
     secagg::MaskedInputCollectionResponse masked_input_response) {
   std::vector<std::unique_ptr<HttpRequest>> requests;
-  FCP_ASSIGN_OR_RETURN(std::string masked_result_upload_uri_suffix,
-                       CreateByteStreamUploadUriSuffix(masked_resource_name_));
+  ABSL_ASSIGN_OR_RETURN(std::string masked_result_upload_uri_suffix,
+                        CreateByteStreamUploadUriSuffix(masked_resource_name_));
 
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> masked_input_upload_request,
       masked_result_upload_request_creator_->CreateProtocolRequest(
           masked_result_upload_uri_suffix, {{"upload_protocol", "raw"}},
@@ -348,10 +348,10 @@ HttpSecAggSendToServerImpl::DoR2SubmitSecureAggregationResult(
   requests.push_back(std::move(masked_input_upload_request));
   bool has_checkpoint = tf_checkpoint_.has_value();
   if (has_checkpoint) {
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         std::string nonmasked_result_upload_uri_suffix,
         CreateByteStreamUploadUriSuffix(nonmasked_resource_name_));
-    FCP_ASSIGN_OR_RETURN(
+    ABSL_ASSIGN_OR_RETURN(
         std::unique_ptr<HttpRequest> nonmasked_input_upload_request,
         nonmasked_result_upload_request_creator_->CreateProtocolRequest(
             nonmasked_result_upload_uri_suffix, {{"upload_protocol", "raw"}},
@@ -359,7 +359,7 @@ HttpSecAggSendToServerImpl::DoR2SubmitSecureAggregationResult(
             /*is_protobuf_encoded=*/false));
     requests.push_back(std::move(nonmasked_input_upload_request));
   }
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
       request_helper_.PerformMultipleProtocolRequests(std::move(requests),
                                                       interruptible_runner_));
@@ -368,28 +368,28 @@ HttpSecAggSendToServerImpl::DoR2SubmitSecureAggregationResult(
       return response.status();
     }
   }
-  FCP_ASSIGN_OR_RETURN(std::string submit_result_uri_suffix,
-                       CreateSubmitSecureAggregationResultUriSuffix(
-                           aggregation_id_, client_token_));
+  ABSL_ASSIGN_OR_RETURN(std::string submit_result_uri_suffix,
+                        CreateSubmitSecureAggregationResultUriSuffix(
+                            aggregation_id_, client_token_));
   SubmitSecureAggregationResultRequest request;
   *request.mutable_masked_result_resource_name() = masked_resource_name_;
   if (has_checkpoint) {
     *request.mutable_nonmasked_result_resource_name() =
         nonmasked_resource_name_;
   }
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> submit_result_request,
       secagg_request_creator_->CreateProtocolRequest(
           submit_result_uri_suffix, QueryParams(), HttpRequest::Method::kPost,
           request.SerializeAsString(),
           /*is_protobuf_encoded=*/true));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       InMemoryHttpResponse response,
       request_helper_.PerformProtocolRequest(std::move(submit_result_request),
                                              interruptible_runner_));
-  FCP_ASSIGN_OR_RETURN(Operation initial_operation,
-                       ParseOperationProtoFromHttpResponse(response));
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(Operation initial_operation,
+                        ParseOperationProtoFromHttpResponse(response));
+  ABSL_ASSIGN_OR_RETURN(
       Operation completed_operation,
       request_helper_.PollOperationResponseUntilDone(
           initial_operation, *secagg_request_creator_, interruptible_runner_));
@@ -413,19 +413,19 @@ HttpSecAggSendToServerImpl::DoR2SubmitSecureAggregationResult(
 absl::StatusOr<secagg::ServerToClientWrapperMessage>
 HttpSecAggSendToServerImpl::DoR3Unmask(
     secagg::UnmaskingResponse unmasking_response) {
-  FCP_ASSIGN_OR_RETURN(std::string unmask_uri_suffix,
-                       CreateUnmaskUriSuffix(aggregation_id_, client_token_));
+  ABSL_ASSIGN_OR_RETURN(std::string unmask_uri_suffix,
+                        CreateUnmaskUriSuffix(aggregation_id_, client_token_));
   UnmaskRequest request;
   *request.mutable_unmasking_client_response() = unmasking_response;
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> unmask_request,
       secagg_request_creator_->CreateProtocolRequest(
           unmask_uri_suffix, QueryParams(), HttpRequest::Method::kPost,
           request.SerializeAsString(),
           /*is_protobuf_encoded=*/true));
-  FCP_ASSIGN_OR_RETURN(InMemoryHttpResponse unmask_response,
-                       request_helper_.PerformProtocolRequest(
-                           std::move(unmask_request), interruptible_runner_));
+  ABSL_ASSIGN_OR_RETURN(InMemoryHttpResponse unmask_response,
+                        request_helper_.PerformProtocolRequest(
+                            std::move(unmask_request), interruptible_runner_));
   return secagg::ServerToClientWrapperMessage();
 }
 

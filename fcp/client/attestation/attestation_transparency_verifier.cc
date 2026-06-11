@@ -22,6 +22,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
@@ -29,7 +30,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/confidentialcompute/payload_transparency/payload_transparency.h"
 #include "fcp/protos/confidentialcompute/key.pb.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
@@ -83,7 +83,7 @@ AttestationTransparencyVerifier::Verify(
 
   // Verify that the encryption key is properly signed, included in a
   // transparency log (if required by `transparency_log_options`), and valid.
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       VerifySignedPayloadResult encryption_key_result,
       VerifySignedPayload(encryption_config.encryption_key(),
                           options_.kms_verifying_keys(),
@@ -118,7 +118,7 @@ AttestationTransparencyVerifier::Verify(
     return absl::InvalidArgumentError(
         "oak application signature headers missing endorsed evidence SHA-256");
   }
-  FCP_RETURN_IF_ERROR(CheckRequiredClaims(
+  ABSL_RETURN_IF_ERROR(CheckRequiredClaims(
       encryption_key_result.headers.front().claims(),
       {
           // Built from open source.
@@ -127,7 +127,7 @@ AttestationTransparencyVerifier::Verify(
 
   // Verify that the pipeline configuration is properly signed, included in a
   // transparency log, and valid.
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       VerifySignedPayloadResult pipeline_config_result,
       VerifySignedPayload(signed_endorsements.pipeline_configuration(),
                           options_.access_policy_verifying_keys(),

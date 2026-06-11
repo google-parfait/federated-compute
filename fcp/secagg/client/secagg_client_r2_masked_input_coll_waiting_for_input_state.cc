@@ -99,9 +99,8 @@ SecAggClientR2MaskedInputCollWaitingForInputState::SetInput(
   // Only need to do 3 things: Validate input, send message to server, and
   // return the new state.
   if (!ValidateInput(*input_map, *input_vector_specs_)) {
-    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
-           << "The input to SetInput does not match the "
-              "InputVectorSpecification.";
+    return absl::InvalidArgumentError(
+        "The input to SetInput does not match the InputVectorSpecification.");
   }
 
   SendMaskedInput(std::move(input_map), std::move(map_of_masks_));

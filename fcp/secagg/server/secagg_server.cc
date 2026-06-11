@@ -26,8 +26,9 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/container/node_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/status_builder.h"
+#include "absl/status/status_macros.h"
 #include "absl/strings/str_cat.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/aes/aes_secagg_server_protocol_impl.h"
 #include "fcp/secagg/server/experiments_names.h"
 #include "fcp/secagg/server/graph_parameter_finder.h"
@@ -145,7 +146,7 @@ absl::StatusOr<std::unique_ptr<SecAggServer>> SecAggServer::Create(
     // We're instantiating full-graph secagg, either because that was
     // the intent of the caller (by setting kFullgraphSecAggExperiment), or
     // because ComputeHararyGraphParameters returned and error.
-    FCP_RETURN_IF_ERROR(CheckFullGraphParameters(
+    ABSL_RETURN_IF_ERROR(CheckFullGraphParameters(
         total_number_of_clients, minimum_number_of_clients_to_proceed,
         threat_model));
     secret_sharing_graph = factory.CreateCompleteGraph(
@@ -177,7 +178,7 @@ absl::StatusOr<std::unique_ptr<SecAggServer>> SecAggServer::Create(
 absl::Status SecAggServer::Abort() {
   const std::string reason = "Abort upon external request.";
   TracingSpan<AbortSecAggServer> span(state_span_->Ref(), reason);
-  FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
+  ABSL_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   TransitionState(state_->Abort(reason, SecAggServerOutcome::EXTERNAL_REQUEST));
   return absl::OkStatus();
 }
@@ -187,7 +188,7 @@ absl::Status SecAggServer::Abort(const std::string& reason,
   const std::string formatted_reason =
       absl::StrCat("Abort upon external request for reason <", reason, ">.");
   TracingSpan<AbortSecAggServer> span(state_span_->Ref(), formatted_reason);
-  FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
+  ABSL_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   TransitionState(state_->Abort(formatted_reason, outcome));
   return absl::OkStatus();
 }
@@ -202,8 +203,8 @@ absl::Status SecAggServer::AbortClient(uint32_t client_id,
   TracingSpan<AbortSecAggClient> span(
       state_span_->Ref(), client_id,
       ClientAbortReason_descriptor()->FindValueByNumber(reason)->name());
-  FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
-  FCP_RETURN_IF_ERROR(ValidateClientId(client_id));
+  ABSL_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
+  ABSL_RETURN_IF_ERROR(ValidateClientId(client_id));
   // By default, put all AbortClient calls in the same bucket (with some
   // exceptions below).
   ClientDropReason client_drop_reason =
@@ -233,7 +234,7 @@ absl::Status SecAggServer::AbortClient(uint32_t client_id,
 
 absl::Status SecAggServer::ProceedToNextRound() {
   TracingSpan<ProceedToNextSecAggRound> span(state_span_->Ref());
-  FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
+  ABSL_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   absl::StatusOr<std::unique_ptr<SecAggServerState>> status_or_next_state =
       state_->ProceedToNextRound();
   if (status_or_next_state.ok()) {
@@ -245,9 +246,9 @@ absl::Status SecAggServer::ProceedToNextRound() {
 absl::StatusOr<bool> SecAggServer::ReceiveMessage(
     uint32_t client_id, std::unique_ptr<ClientToServerWrapperMessage> message) {
   TracingSpan<ReceiveSecAggMessage> span(state_span_->Ref(), client_id);
-  FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
-  FCP_RETURN_IF_ERROR(ValidateClientId(client_id));
-  FCP_RETURN_IF_ERROR(state_->HandleMessage(client_id, std::move(message)));
+  ABSL_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
+  ABSL_RETURN_IF_ERROR(ValidateClientId(client_id));
+  ABSL_RETURN_IF_ERROR(state_->HandleMessage(client_id, std::move(message)));
   return ReadyForNextRound();
 }
 
@@ -285,7 +286,7 @@ bool SecAggServer::IsNumberOfIncludedInputsCommitted() const {
 }
 
 absl::StatusOr<int> SecAggServer::MinimumMessagesNeededForNextRound() const {
-  FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
+  ABSL_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   return state_->MinimumMessagesNeededForNextRound();
 }
 
@@ -314,17 +315,17 @@ int SecAggServer::NumberOfPendingClients() const {
 }
 
 absl::StatusOr<int> SecAggServer::NumberOfClientsReadyForNextRound() const {
-  FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
+  ABSL_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   return state_->NumberOfClientsReadyForNextRound();
 }
 
 absl::StatusOr<int> SecAggServer::NumberOfMessagesReceivedInThisRound() const {
-  FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
+  ABSL_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   return state_->NumberOfMessagesReceivedInThisRound();
 }
 
 absl::StatusOr<bool> SecAggServer::ReadyForNextRound() const {
-  FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
+  ABSL_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   return state_->ReadyForNextRound();
 }
 
@@ -344,7 +345,7 @@ SecAggServerStateKind SecAggServer::State() const { return state_->State(); }
 
 absl::Status SecAggServer::ValidateClientId(uint32_t client_id) const {
   if (client_id >= state_->total_number_of_clients()) {
-    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
+    return absl::StatusBuilder(absl::StatusCode::kFailedPrecondition)
            << "Client Id " << client_id
            << " is outside of the expected bounds - 0 to "
            << state_->total_number_of_clients();
@@ -354,14 +355,13 @@ absl::Status SecAggServer::ValidateClientId(uint32_t client_id) const {
 
 absl::Status SecAggServer::ErrorIfAbortedOrCompleted() const {
   if (state_->IsAborted()) {
-    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
-           << "The server has already aborted. The request cannot be "
-              "satisfied.";
+    return absl::FailedPreconditionError(
+        "The server has already aborted. The request cannot be satisfied.");
   }
   if (state_->IsCompletedSuccessfully()) {
-    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
-           << "The server has already completed the protocol. "
-           << "Call getOutput() to retrieve the output.";
+    return absl::FailedPreconditionError(
+        "The server has already completed the protocol. Call getOutput() to "
+        "retrieve the output.");
   }
   return absl::OkStatus();
 }

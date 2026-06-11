@@ -22,6 +22,7 @@
 #include <memory>
 #include <utility>
 
+#include "absl/memory/memory.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/secret_sharing_complete_graph.h"
 #include "fcp/secagg/server/secret_sharing_graph.h"

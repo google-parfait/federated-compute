@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include "fcp/base/monitoring.h"
+#include "absl/status/statusor.h"
 #include "fcp/secagg/client/send_to_server_interface.h"
 #include "fcp/secagg/client/state_transition_listener_interface.h"
 #include "fcp/secagg/shared/input_vector_specification.h"

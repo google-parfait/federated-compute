@@ -30,6 +30,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/match.h"
@@ -158,26 +159,26 @@ absl::Status GenerateAggregationTensorsFromExampleQueryResult(
     const ExampleQueryResult::VectorData::Values values = it->second;
     Tensor tensor;
     if (values.has_int32_values()) {
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           CheckOutputVectorDataType(output_vector_spec, DataType::INT32));
-      FCP_ASSIGN_OR_RETURN(
+      ABSL_ASSIGN_OR_RETURN(
           tensor, ConvertNumericTensor<int32_t>(
                       tensorflow_federated::aggregation::DT_INT32,
                       TensorShape({values.int32_values().value_size()}),
                       values.int32_values().value()));
 
     } else if (values.has_int64_values()) {
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           CheckOutputVectorDataType(output_vector_spec, DataType::INT64));
-      FCP_ASSIGN_OR_RETURN(
+      ABSL_ASSIGN_OR_RETURN(
           tensor, ConvertNumericTensor<int64_t>(
                       tensorflow_federated::aggregation::DT_INT64,
                       TensorShape({values.int64_values().value_size()}),
                       values.int64_values().value()));
     } else if (values.has_string_values()) {
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           CheckOutputVectorDataType(output_vector_spec, DataType::STRING));
-      FCP_ASSIGN_OR_RETURN(
+      ABSL_ASSIGN_OR_RETURN(
           tensor, ConvertStringTensor(
                       TensorShape({values.string_values().value_size()}),
                       values.string_values().value()));
@@ -185,17 +186,17 @@ absl::Status GenerateAggregationTensorsFromExampleQueryResult(
       // TODO: b/296046539 - add support for bool values type
       return absl::UnimplementedError("Bool values currently not supported.");
     } else if (values.has_float_values()) {
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           CheckOutputVectorDataType(output_vector_spec, DataType::FLOAT));
-      FCP_ASSIGN_OR_RETURN(
+      ABSL_ASSIGN_OR_RETURN(
           tensor, ConvertNumericTensor<float>(
                       tensorflow_federated::aggregation::DT_FLOAT,
                       TensorShape({values.float_values().value_size()}),
                       values.float_values().value()));
     } else if (values.has_double_values()) {
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           CheckOutputVectorDataType(output_vector_spec, DataType::DOUBLE));
-      FCP_ASSIGN_OR_RETURN(
+      ABSL_ASSIGN_OR_RETURN(
           tensor, ConvertNumericTensor<double>(
                       tensorflow_federated::aggregation::DT_DOUBLE,
                       TensorShape({values.double_values().value_size()}),
@@ -220,7 +221,7 @@ absl::Status GenerateAggregationTensorsFromExampleQueryResult(
             "BYTES or STRING, got: ",
             DataType_Name(output_vector_spec.data_type())));
       }
-      FCP_ASSIGN_OR_RETURN(
+      ABSL_ASSIGN_OR_RETURN(
           tensor,
           ConvertStringTensor(TensorShape({values.bytes_values().value_size()}),
                               values.bytes_values().value()));
@@ -228,7 +229,7 @@ absl::Status GenerateAggregationTensorsFromExampleQueryResult(
       return absl::DataLossError(
           "Unexpected data type in the example query result");
     }
-    FCP_RETURN_IF_ERROR(checkpoint_builder.Add(output_name, tensor));
+    ABSL_RETURN_IF_ERROR(checkpoint_builder.Add(output_name, tensor));
   }
   return absl::OkStatus();
 }
@@ -244,7 +245,7 @@ absl::Status GenerateAggregationTensorsFromStructuredResults(
     const ExampleQuerySpec& example_query_spec) {
   for (auto const& [example_query, example_query_result] :
        structured_example_query_results) {
-    FCP_RETURN_IF_ERROR(GenerateAggregationTensorsFromExampleQueryResult(
+    ABSL_RETURN_IF_ERROR(GenerateAggregationTensorsFromExampleQueryResult(
         checkpoint_builder, example_query, example_query_result));
   }
   return absl::OkStatus();
@@ -256,8 +257,8 @@ absl::Status GenerateAggregationTensorsFromDirectQueryResults(
     const absl::flat_hash_map<std::string, std::vector<std::string>>&
         raw_example_query_results) {
   for (auto const& [vector_name, vector_value] : raw_example_query_results) {
-    FCP_ASSIGN_OR_RETURN(Tensor tensor, ConvertStringTensor(&vector_value));
-    FCP_RETURN_IF_ERROR(checkpoint_builder.Add(vector_name, tensor));
+    ABSL_ASSIGN_OR_RETURN(Tensor tensor, ConvertStringTensor(&vector_value));
+    ABSL_RETURN_IF_ERROR(checkpoint_builder.Add(vector_name, tensor));
   }
   return absl::OkStatus();
 }
@@ -284,15 +285,15 @@ absl::Status CreateOrUpdateCheckpointBuilders(
       // Add the privacy ID to the checkpoint builder.
       const std::vector<std::string> privacy_id_vector = {
           per_privacy_id_result.privacy_id};
-      FCP_ASSIGN_OR_RETURN(Tensor privacy_id_tensor,
-                           ConvertStringTensor(&privacy_id_vector));
-      FCP_RETURN_IF_ERROR(checkpoint_builder->Add(
+      ABSL_ASSIGN_OR_RETURN(Tensor privacy_id_tensor,
+                            ConvertStringTensor(&privacy_id_vector));
+      ABSL_RETURN_IF_ERROR(checkpoint_builder->Add(
           confidential_compute::kPrivacyIdColumnName, privacy_id_tensor));
 
       in_progress_checkpoints[per_privacy_id_result.privacy_id] = {
           .checkpoint_builder = std::move(checkpoint_builder)};
     }
-    FCP_RETURN_IF_ERROR(GenerateAggregationTensorsFromExampleQueryResult(
+    ABSL_RETURN_IF_ERROR(GenerateAggregationTensorsFromExampleQueryResult(
         *in_progress_checkpoints[per_privacy_id_result.privacy_id]
              .checkpoint_builder,
         split_results.example_query,
@@ -361,8 +362,8 @@ absl::Status AddCheckpointsToPlanResult(
     PlanResult& plan_result) {
   for (auto& [privacy_id, in_progress_checkpoint] : in_progress_checkpoints) {
     FederatedComputeCheckpoint checkpoint;
-    FCP_ASSIGN_OR_RETURN(checkpoint.payload,
-                         in_progress_checkpoint.checkpoint_builder->Build());
+    ABSL_ASSIGN_OR_RETURN(checkpoint.payload,
+                          in_progress_checkpoint.checkpoint_builder->Build());
     checkpoint.metadata = std::move(in_progress_checkpoint.payload_metadata);
     plan_result.federated_compute_checkpoints.push_back(std::move(checkpoint));
   }

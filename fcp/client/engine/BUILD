@@ -39,7 +39,6 @@ cc_library(
     copts = FCP_COPTS,
     visibility = default_visibility,
     deps = [
-        "//fcp/base",
         "//fcp/base:digest",
         "//fcp/client:event_time_range_cc_proto",
         "//fcp/client:example_query_result_cc_proto",
@@ -49,6 +48,7 @@ cc_library(
         "//fcp/protos/confidentialcompute:windowing_schedule_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
@@ -114,6 +114,7 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",

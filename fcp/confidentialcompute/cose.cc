@@ -24,11 +24,11 @@
 
 #include "absl/base/casts.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "fcp/base/monitoring.h"
 #ifdef FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
 #include "libcppbor/include/cppbor/cppbor.h"
 #include "libcppbor/include/cppbor/cppbor_parse.h"
@@ -145,8 +145,8 @@ absl::StatusOr<std::vector<uint8_t>> BuildCwtPayload(
     map.add(CwtClaim::kIat, absl::ToUnixSeconds(*cwt.issued_at));
   }
   if (cwt.public_key) {
-    FCP_ASSIGN_OR_RETURN(std::string encoded_public_key,
-                         cwt.public_key->Encode());
+    ABSL_ASSIGN_OR_RETURN(std::string encoded_public_key,
+                          cwt.public_key->Encode());
     map.add(CwtClaim::kPublicKey, Bstr(encoded_public_key));
   }
   if (!cwt.config_properties.empty()) {
@@ -289,7 +289,7 @@ absl::Status ParseCwtPayload(const std::vector<uint8_t>& serialized_payload,
           return absl::InvalidArgumentError(
               absl::StrCat("unsupported public_key type ", value->type()));
         }
-        FCP_ASSIGN_OR_RETURN(
+        ABSL_ASSIGN_OR_RETURN(
             cwt.public_key,
             T::Decode(absl::string_view(
                 reinterpret_cast<const char*>(value->asBstr()->value().data()),
@@ -836,7 +836,7 @@ cose_internal::BaseCwt<T>::BuildSigStructureForSigning(
   std::vector<uint8_t> protected_header =
       BuildProtectedHeader(algorithm, /*src_state=*/std::nullopt,
                            /*dst_state=*/std::nullopt);
-  FCP_ASSIGN_OR_RETURN(std::vector<uint8_t> payload, BuildCwtPayload(*this));
+  ABSL_ASSIGN_OR_RETURN(std::vector<uint8_t> payload, BuildCwtPayload(*this));
   return BuildSigStructure(std::move(protected_header), std::nullopt, aad,
                            std::move(payload));
 }
@@ -847,7 +847,7 @@ cose_internal::BaseCwt<T>::GetSigStructureForVerifying(
     absl::string_view encoded, absl::string_view aad) {
   std::vector<uint8_t> body_protected, payload;
   std::optional<std::vector<uint8_t>> sign_protected;
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::tie(body_protected, sign_protected, payload, std::ignore),
       ParseCoseSign(encoded));
   return BuildSigStructure(std::move(body_protected), std::move(sign_protected),
@@ -859,17 +859,17 @@ absl::StatusOr<cose_internal::BaseCwt<T>> cose_internal::BaseCwt<T>::Decode(
     absl::string_view encoded) {
   std::vector<uint8_t> body_protected, payload, signature;
   std::optional<std::vector<uint8_t>> sign_protected;
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::tie(body_protected, sign_protected, payload, signature),
       ParseCoseSign(encoded));
   cose_internal::BaseCwt<T> cwt;
   // When decoding a COSE_Sign structure, information will be in the signer
   // protected header instead of the body protected header.
-  FCP_RETURN_IF_ERROR(ParseProtectedHeader(
+  ABSL_RETURN_IF_ERROR(ParseProtectedHeader(
       sign_protected ? *sign_protected : body_protected, &cwt.algorithm,
       /*src_state=*/nullptr,
       /*dst_state=*/nullptr));
-  FCP_RETURN_IF_ERROR(ParseCwtPayload(payload, cwt));
+  ABSL_RETURN_IF_ERROR(ParseCwtPayload(payload, cwt));
   cwt.signature = std::string(signature.begin(), signature.end());
   return cwt;
 }
@@ -881,7 +881,7 @@ absl::StatusOr<std::string> cose_internal::BaseCwt<T>::Encode() const {
   array.add(BuildProtectedHeader(algorithm, /*src_state=*/std::nullopt,
                                  /*dst_state=*/std::nullopt));
   array.add(Map());  // unprotected header
-  FCP_ASSIGN_OR_RETURN(std::vector<uint8_t> payload, BuildCwtPayload(*this));
+  ABSL_ASSIGN_OR_RETURN(std::vector<uint8_t> payload, BuildCwtPayload(*this));
   array.add(std::move(payload));
   array.add(Bstr(signature));
   return array.toString();
@@ -897,11 +897,12 @@ absl::StatusOr<std::string> ReleaseToken::BuildEncStructureForEncrypting(
 absl::StatusOr<std::string> ReleaseToken::GetEncStructureForDecrypting(
     absl::string_view encoded, absl::string_view aad) {
   std::vector<uint8_t> payload;
-  FCP_ASSIGN_OR_RETURN(std::tie(std::ignore, std::ignore, payload, std::ignore),
-                       ParseCoseSign(encoded));
+  ABSL_ASSIGN_OR_RETURN(
+      std::tie(std::ignore, std::ignore, payload, std::ignore),
+      ParseCoseSign(encoded));
   std::vector<uint8_t> protected_header;
-  FCP_ASSIGN_OR_RETURN(std::tie(protected_header, std::ignore, std::ignore),
-                       ParseCoseEncrypt0(payload));
+  ABSL_ASSIGN_OR_RETURN(std::tie(protected_header, std::ignore, std::ignore),
+                        ParseCoseEncrypt0(payload));
   return BuildEncStructure(std::move(protected_header), aad);
 }
 
@@ -927,21 +928,21 @@ absl::StatusOr<ReleaseToken> ReleaseToken::Decode(absl::string_view encoded) {
 
   // Parse the outer COSE_Sign1 structure.
   std::vector<uint8_t> protected_header, payload, signature;
-  FCP_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       std::tie(protected_header, std::ignore, payload, signature),
       ParseCoseSign(encoded));
-  FCP_RETURN_IF_ERROR(
+  ABSL_RETURN_IF_ERROR(
       ParseProtectedHeader(protected_header, &token.signing_algorithm,
                            /*src_state=*/nullptr, /*dst_state=*/nullptr));
   token.signature = std::string(signature.begin(), signature.end());
 
   // Parse the inner COSE_Encrypt0 structure.
   Map unprotected_header;
-  FCP_ASSIGN_OR_RETURN(std::tie(protected_header, unprotected_header, payload),
-                       ParseCoseEncrypt0(payload));
-  FCP_RETURN_IF_ERROR(ParseProtectedHeader(protected_header,
-                                           &token.encryption_algorithm,
-                                           &token.src_state, &token.dst_state));
+  ABSL_ASSIGN_OR_RETURN(std::tie(protected_header, unprotected_header, payload),
+                        ParseCoseEncrypt0(payload));
+  ABSL_RETURN_IF_ERROR(
+      ParseProtectedHeader(protected_header, &token.encryption_algorithm,
+                           &token.src_state, &token.dst_state));
   token.encrypted_payload = std::string(payload.begin(), payload.end());
 
   // Process the COSE_Encrypt0 unprotected header.
@@ -1140,7 +1141,7 @@ absl::StatusOr<std::string> SymmetricKey::Encode(
   // Add the algorithm entry to the map if it is set.
   if (algorithm) {
     output.push_back(0x03);  // alg (3)
-    FCP_RETURN_IF_ERROR(EncodeInt(*algorithm, output));
+    ABSL_RETURN_IF_ERROR(EncodeInt(*algorithm, output));
   }
 
   // Add the key_ops entry to the map if it is non-empty.
@@ -1153,7 +1154,7 @@ absl::StatusOr<std::string> SymmetricKey::Encode(
     output.push_back(0x04);                   // key_ops (4)
     output.push_back(0x80 + key_ops.size());  // array with size key_ops.size()
     for (int64_t key_op : key_ops) {
-      FCP_RETURN_IF_ERROR(EncodeInt(key_op, output));
+      ABSL_RETURN_IF_ERROR(EncodeInt(key_op, output));
     }
   }
 

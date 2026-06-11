@@ -30,7 +30,7 @@ namespace fcp {
  *
  * Status Method(...) {
  *   ReentrancyGuard guard;
- *   FCP_RETURN_IF_ERROR(guard.Check(&in_use_));
+ *   ABSL_RETURN_IF_ERROR(guard.Check(&in_use_));
  *
  *   // The rest of the method body...
  * }
@@ -44,8 +44,7 @@ class ReentrancyGuard {
     FCP_CHECK(in_use != nullptr);
     bool expected_value = false;
     if (!in_use->compare_exchange_strong(expected_value, true)) {
-      return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
-             << "Concurrent method calls detected";
+      return absl::FailedPreconditionError("Concurrent method calls detected");
     }
 
     in_use_ = in_use;

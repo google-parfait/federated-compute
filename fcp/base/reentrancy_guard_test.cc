@@ -19,9 +19,9 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/status_matchers.h"
 #include "absl/synchronization/notification.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/base/scheduler.h"
 
 namespace fcp {
@@ -39,14 +39,14 @@ class ReentrancyGuardTest : public testing::Test {
 
   absl::Status ReentrantMethod() {
     ReentrancyGuard guard;
-    FCP_RETURN_IF_ERROR((guard.Check(&in_use_)));
+    ABSL_RETURN_IF_ERROR(guard.Check(&in_use_));
     return ReentrantMethod();
   }
 
   absl::Status LongRunningMethod(absl::Notification* method_entered,
                                  absl::Notification* resume) {
     ReentrancyGuard guard;
-    FCP_RETURN_IF_ERROR((guard.Check(&in_use_)));
+    ABSL_RETURN_IF_ERROR(guard.Check(&in_use_));
     method_entered->Notify();
     resume->WaitForNotification();
     return absl::OkStatus();

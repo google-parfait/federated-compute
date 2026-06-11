@@ -20,6 +20,7 @@
 #include <string>
 
 #include "absl/status/status.h"
+#include "absl/status/status_builder.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/shared/aes_key.h"
 #include "fcp/secagg/shared/ecdh_keys.h"
@@ -44,14 +45,14 @@ EcdhKeyAgreement::CreateFromRandomKeys() {
   if (EC_KEY_check_key(key)) {
     return std::make_unique<EcdhKeyAgreement>(key);
   } else {
-    return FCP_STATUS(absl::StatusCode::kInternal);
+    return absl::InternalError("");
   }
 }
 
 absl::StatusOr<std::unique_ptr<EcdhKeyAgreement>>
 EcdhKeyAgreement::CreateFromPrivateKey(const EcdhPrivateKey& private_key) {
   if (private_key.size() != EcdhPrivateKey::kSize) {
-    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
+    return absl::StatusBuilder(absl::StatusCode::kInvalidArgument)
            << "Private key must be of length " << EcdhPrivateKey::kSize;
   }
   // Wrap a raw pointer in a unique_ptr with a deleter to guarantee deletion.
@@ -61,8 +62,7 @@ EcdhKeyAgreement::CreateFromPrivateKey(const EcdhPrivateKey& private_key) {
                                                             BN_free);
   EC_KEY* key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
   if (!EC_KEY_set_private_key(key, private_key_bn.get())) {
-    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
-           << "Invalid private key.";
+    return absl::InvalidArgumentError("Invalid private key.");
   }
   return std::make_unique<EcdhKeyAgreement>(key);
 }
@@ -72,7 +72,7 @@ EcdhKeyAgreement::CreateFromKeypair(const EcdhPrivateKey& private_key,
                                     const EcdhPublicKey& public_key) {
   if (public_key.size() != EcdhPublicKey::kSize &&
       public_key.size() != EcdhPublicKey::kUncompressedSize) {
-    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
+    return absl::StatusBuilder(absl::StatusCode::kInvalidArgument)
            << "Public key must be of length " << EcdhPublicKey::kSize << " or "
            << EcdhPublicKey::kUncompressedSize;
   }
@@ -94,20 +94,18 @@ EcdhKeyAgreement::CreateFromKeypair(const EcdhPrivateKey& private_key,
 
   if (!EC_POINT_oct2point(EC_KEY_get0_group(key_ptr), public_key_point.get(),
                           public_key.data(), public_key.size(), nullptr)) {
-    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
-           << "Invalid public key.";
+    return absl::InvalidArgumentError("Invalid public key.");
   }
 
   // This makes a copy of the public key, so deletion is safe.
   if (!EC_KEY_set_public_key(key_ptr, public_key_point.get())) {
-    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
-           << "Invalid public key.";
+    return absl::InvalidArgumentError("Invalid public key.");
   }
 
   if (EC_KEY_check_key(key_ptr)) {
     return ecdh;
   } else {
-    return FCP_STATUS(absl::StatusCode::kInvalidArgument) << "Invalid keypair.";
+    return absl::InvalidArgumentError("Invalid keypair.");
   }
 }
 
@@ -136,7 +134,7 @@ absl::StatusOr<AesKey> EcdhKeyAgreement::ComputeSharedSecret(
     const EcdhPublicKey& other_key) const {
   if (other_key.size() != EcdhPublicKey::kSize &&
       other_key.size() != EcdhPublicKey::kUncompressedSize) {
-    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
+    return absl::StatusBuilder(absl::StatusCode::kInvalidArgument)
            << "Public key must be of length " << EcdhPublicKey::kSize << " or "
            << EcdhPublicKey::kUncompressedSize;
   }
@@ -146,8 +144,7 @@ absl::StatusOr<AesKey> EcdhKeyAgreement::ComputeSharedSecret(
                                                              EC_POINT_free);
   if (!EC_POINT_oct2point(EC_KEY_get0_group(key_.get()), other_point.get(),
                           other_key.data(), other_key.size(), nullptr)) {
-    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
-           << "Invalid ECDH public key.";
+    return absl::InvalidArgumentError("Invalid ECDH public key.");
   }
   uint8_t secret[AesKey::kSize];
   ECDH_compute_key(secret, AesKey::kSize, other_point.get(), key_.get(),

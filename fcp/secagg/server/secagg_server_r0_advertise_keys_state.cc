@@ -22,7 +22,7 @@
 #include <utility>
 
 #include "absl/status/status.h"
-#include "fcp/base/monitoring.h"
+#include "absl/status/status_macros.h"
 #include "fcp/secagg/server/secagg_server_r1_share_keys_state.h"
 
 namespace fcp {
@@ -116,7 +116,7 @@ void SecAggServerR0AdvertiseKeysState::HandleAbortClient(
 absl::StatusOr<std::unique_ptr<SecAggServerState>>
 SecAggServerR0AdvertiseKeysState::ProceedToNextRound() {
   if (!ReadyForNextRound()) {
-    return FCP_STATUS(absl::StatusCode::kUnavailable);
+    return absl::UnavailableError("");
   }
   if (needs_to_abort_) {
     std::string error_string = "Too many clients aborted.";
@@ -145,7 +145,7 @@ SecAggServerR0AdvertiseKeysState::ProceedToNextRound() {
   ServerToClientWrapperMessage message_to_client;
   message_to_client.mutable_share_keys_request()->set_session_id(
       impl()->session_id().data);
-  FCP_RETURN_IF_ERROR(impl()->InitializeShareKeysRequest(
+  ABSL_RETURN_IF_ERROR(impl()->InitializeShareKeysRequest(
       message_to_client.mutable_share_keys_request()));
 
   for (int i = 0; i < total_number_of_clients(); ++i) {

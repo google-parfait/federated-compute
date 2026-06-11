@@ -17,7 +17,8 @@
 #ifndef FCP_SECAGG_SERVER_GRAPH_PARAMETER_FINDER_H_
 #define FCP_SECAGG_SERVER_GRAPH_PARAMETER_FINDER_H_
 
-#include "fcp/base/monitoring.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "fcp/secagg/server/secagg_server_enums.pb.h"
 #include "fcp/secagg/server/secagg_server_messages.pb.h"
 

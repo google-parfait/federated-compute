@@ -90,6 +90,8 @@ cc_library(
         "@com_google_absl//absl/numeric:bits",
         "@com_google_absl//absl/numeric:int128",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_builder",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:resize_and_overwrite",

@@ -25,6 +25,7 @@
 #include "google/rpc/status.pb.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
@@ -33,7 +34,6 @@
 #include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/http/http_client.h"
 
 namespace fcp {
@@ -236,8 +236,8 @@ absl::StatusOr<std::string> EncodeUriMultiplePathSegments(
 absl::StatusOr<std::string> CreateByteStreamUploadUriSuffix(
     absl::string_view resource_name) {
   constexpr absl::string_view pattern = "/upload/v1/media/$0";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_resource_name,
-                       EncodeUriMultiplePathSegments(resource_name));
+  ABSL_ASSIGN_OR_RETURN(std::string encoded_resource_name,
+                        EncodeUriMultiplePathSegments(resource_name));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_resource_name);
 }

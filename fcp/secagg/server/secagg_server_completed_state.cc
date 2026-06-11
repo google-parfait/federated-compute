@@ -20,7 +20,6 @@
 #include <utility>
 
 #include "absl/status/status.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/tracing/tracing_span.h"
 
 namespace fcp {
@@ -61,8 +60,8 @@ absl::StatusOr<std::unique_ptr<SecAggVectorMap>>
 SecAggServerCompletedState::Result() {
   auto result = impl()->TakeResult();
   if (!result) {
-    return FCP_STATUS(absl::StatusCode::kUnavailable)
-           << "Result is uninitialized or requested more than once";
+    return absl::UnavailableError(
+        "Result is uninitialized or requested more than once");
   }
   return std::move(result);
 }

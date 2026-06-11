@@ -33,6 +33,7 @@
 #include "absl/cleanup/cleanup.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/escaping.h"
@@ -154,7 +155,7 @@ FileBackedResourceCache::Create(absl::string_view base_dir,
           sanitize_client_cache_id));
   {
     absl::MutexLock lock(resource_cache->mutex_);
-    FCP_RETURN_IF_ERROR(resource_cache->Initialize());
+    ABSL_RETURN_IF_ERROR(resource_cache->Initialize());
   }
 
   return resource_cache;
@@ -170,8 +171,8 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
     return absl::ResourceExhaustedError(absl::StrCat(cache_id, " too large"));
   }
 
-  FCP_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
-  FCP_RETURN_IF_ERROR(CleanUp(resource.size(), manifest));
+  ABSL_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
+  ABSL_RETURN_IF_ERROR(CleanUp(resource.size(), manifest));
 
   std::string cache_id_str(cache_id);
   std::string file_name = sanitize_client_cache_id_
@@ -190,7 +191,7 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
 
   // Write the manifest back to disk before we write the file.
   manifest.mutable_cache()->insert({cache_id_str, cached_resource});
-  FCP_RETURN_IF_ERROR(
+  ABSL_RETURN_IF_ERROR(
       WriteInternal(std::make_unique<CacheManifest>(std::move(manifest))));
 
   // Write file if it doesn't exist.
@@ -225,7 +226,7 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
     log_manager_.LogDiag(diag_code);
   };
   absl::MutexLock lock(mutex_);
-  FCP_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
+  ABSL_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
 
   std::string cache_id_str(cache_id);
   auto it = manifest.cache().find(cache_id_str);
@@ -398,7 +399,7 @@ absl::Status FileBackedResourceCache::CleanUp(
     }
   }
 
-  FCP_RETURN_IF_ERROR(filesystem_status);
+  ABSL_RETURN_IF_ERROR(filesystem_status);
 
   // If we still exceed the allowed size of the cache, delete entries until
   // we're under the allowed size, sorted by least recently used.
@@ -448,7 +449,7 @@ absl::Status FileBackedResourceCache::CleanUp(
     }
   }
 
-  FCP_RETURN_IF_ERROR(filesystem_status);
+  ABSL_RETURN_IF_ERROR(filesystem_status);
 
   // Then, if the cache is bigger than the allowed size, delete entries ordered
   // by least recently used until we're below the threshold.
@@ -487,7 +488,7 @@ absl::Status FileBackedResourceCache::CleanUp(
     }
   }
 
-  FCP_RETURN_IF_ERROR(filesystem_status);
+  ABSL_RETURN_IF_ERROR(filesystem_status);
 
   return absl::OkStatus();
 }

@@ -27,13 +27,13 @@
 #include "absl/container/inlined_vector.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/confidentialcompute/payload_transparency/rekor.h"
 #include "fcp/confidentialcompute/payload_transparency/signatures.h"
 #include "fcp/protos/confidentialcompute/access_policy_endorsement_options.pb.h"
@@ -100,7 +100,7 @@ absl::StatusOr<VerifySignedPayloadResult> VerifySignedPayloadSignature(
   if (!headers.ParseFromString(signature.headers())) {
     return absl::InvalidArgumentError("failed to parse signature headers");
   }
-  FCP_RETURN_IF_ERROR(VerifyHeaders(headers, now));
+  ABSL_RETURN_IF_ERROR(VerifyHeaders(headers, now));
 
   // Find the key(s) to use for verification. There should usually only be one
   // matching key, but multiple matches are possible since key_ids are not
@@ -123,7 +123,7 @@ absl::StatusOr<VerifySignedPayloadResult> VerifySignedPayloadSignature(
     // A verifying_key is a nested SignedPayload message containing the Key,
     // which can only be trusted if SignedPayload verification succeeds.
     case SignedPayload::Signature::kVerifyingKey: {
-      FCP_ASSIGN_OR_RETURN(
+      ABSL_ASSIGN_OR_RETURN(
           verify_result,
           VerifySignedPayload(signature.verifying_key(), verifying_keys,
                               transparency_log_options, now));
@@ -152,13 +152,13 @@ absl::StatusOr<VerifySignedPayloadResult> VerifySignedPayloadSignature(
         return absl::InvalidArgumentError(
             "SignedPayload.Signature does not have a transparency log entry");
       }
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           VerifySignature(signature.raw_signature(), SignatureFormat::kP1363,
                           filtered_verifying_keys, signed_data));
       break;
 
     case SignedPayload::Signature::kLogEntry:
-      FCP_RETURN_IF_ERROR(
+      ABSL_RETURN_IF_ERROR(
           VerifyLogEntry(signature.log_entry(), filtered_verifying_keys,
                          transparency_log_options, signed_data));
       break;
