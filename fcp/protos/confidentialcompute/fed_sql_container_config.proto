@@ -38,13 +38,6 @@ message FedSqlContainerInitializeConfiguration {
   // Configuration for possibly encrypted auto-tuning parameters.
   FedSqlContainerAutoTuningConfig auto_tuning_config = 11;
 
-  // The start and end time of the aggregation window. This is used for
-  // time-based budget tracking. Any blobs outside of this time window will be
-  // dropped. The event times for each blob must be present in the encrypted
-  // blob payload which will be checked against this time window.
-  google.protobuf.Timestamp start_time = 12;
-  google.protobuf.Timestamp end_time = 13;
-
   reserved 2, 3, 4, 5, 7, 8, 9;
 }
 
