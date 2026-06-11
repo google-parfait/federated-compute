@@ -30,8 +30,8 @@
 #include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/time/simulated_clock.h"
 #include "absl/time/time.h"
-#include "fcp/base/simulated_clock.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
@@ -133,7 +133,7 @@ class EligibilityDeciderTest : public testing::Test {
  protected:
   StrictMock<MockLogManager> mock_log_manager_;
   NiceMock<MockPhaseLogger> mock_phase_logger_;
-  SimulatedClock clock_;
+  absl::SimulatedClock clock_;
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories_;
   NiceMock<MockEetPlanRunner> mock_eet_plan_runner_;
   MockFlags mock_flags_;

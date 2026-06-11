@@ -30,8 +30,9 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/base/time_util.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/diag_codes.pb.h"
@@ -70,14 +71,15 @@ using ::testing::UnorderedElementsAre;
 
 constexpr absl::string_view kApiKey = "API_KEY";
 
-class MockClock : public Clock {
+class MockClock : public absl::Clock {
  public:
-  MOCK_METHOD(absl::Time, Now, (), (override));
+  MOCK_METHOD(absl::Time, TimeNow, (), (override));
   MOCK_METHOD(void, Sleep, (absl::Duration duration), (override));
 
  protected:
-  MOCK_METHOD(absl::Time, NowLocked, (), (override));
-  MOCK_METHOD(void, ScheduleWakeup, (absl::Time wakeup_time), (override));
+  MOCK_METHOD(void, SleepUntil, (absl::Time wakup_time), (override));
+  MOCK_METHOD(bool, AwaitWithDeadline,
+              (absl::Mutex*, const absl::Condition&, absl::Time), (override));
 };
 
 void VerifyInMemoryHttpResponse(const InMemoryHttpResponse& response, int code,

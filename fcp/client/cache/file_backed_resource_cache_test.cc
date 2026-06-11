@@ -28,8 +28,8 @@
 #include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/time/simulated_clock.h"
 #include "absl/time/time.h"
-#include "fcp/base/simulated_clock.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/test_helpers.h"
@@ -89,7 +89,7 @@ class FileBackedResourceCacheTest : public testing::Test {
   }
 
   testing::StrictMock<MockLogManager> log_manager_;
-  SimulatedClock clock_;
+  absl::SimulatedClock clock_;
   std::string root_cache_dir_;
   std::string root_files_dir_;
   std::filesystem::path cache_dir_;

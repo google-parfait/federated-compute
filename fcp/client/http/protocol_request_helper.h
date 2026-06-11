@@ -26,7 +26,7 @@
 #include "absl/random/random.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "fcp/base/clock.h"
+#include "absl/time/clock_interface.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/in_memory_request_response.h"
@@ -120,9 +120,9 @@ class ProtocolRequestHelper {
  public:
   ProtocolRequestHelper(HttpClient* http_client, int64_t* bytes_downloaded,
                         int64_t* bytes_uploaded,
-                        WallClockStopwatch* network_stopwatch, Clock* clock,
-                        absl::BitGen* bit_gen, int32_t retry_max_attempts,
-                        int32_t retry_delay_ms);
+                        WallClockStopwatch* network_stopwatch,
+                        absl::Clock* clock, absl::BitGen* bit_gen,
+                        int32_t retry_max_attempts, int32_t retry_delay_ms);
 
   // Performs the given request (handling any interruptions that may occur) and
   // updates the network stats.
@@ -165,7 +165,7 @@ class ProtocolRequestHelper {
   int64_t& bytes_downloaded_;
   int64_t& bytes_uploaded_;
   WallClockStopwatch& network_stopwatch_;
-  Clock& clock_;
+  absl::Clock& clock_;
   absl::BitGen& bit_gen_;
   int32_t retry_max_attempts_;
   int32_t retry_delay_ms_;

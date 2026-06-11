@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
-#include "fcp/base/clock.h"
+#include "absl/time/clock_interface.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
@@ -56,7 +56,7 @@ class EetPlanRunner {
 absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
     const PopulationEligibilitySpec& eligibility_spec, LogManager& log_manager,
     PhaseLogger& phase_logger, const opstats::OpStatsSequence& opstats_sequence,
-    Clock& clock,
+    absl::Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     EetPlanRunner& eet_plan_runner, const Flags* flags);
 

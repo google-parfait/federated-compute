@@ -21,8 +21,8 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
@@ -98,7 +98,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     FederatedSelectManager* fedselect_manager,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     absl::Time reference_time, const std::string& session_name,
-    const std::string& population_name, Clock& clock);
+    const std::string& population_name, absl::Clock& clock);
 
 }  // namespace client
 }  // namespace fcp

@@ -26,8 +26,8 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/client/http/protocol_request_helper.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/secagg_runner.h"
@@ -47,7 +47,7 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
   // ProtocolRequestCreator based on the input ForwardingInfo or
   // ByteStreamResources.
   static absl::StatusOr<std::unique_ptr<HttpSecAggSendToServerImpl>> Create(
-      absl::string_view api_key, Clock* clock,
+      absl::string_view api_key, absl::Clock* clock,
       ProtocolRequestHelper* request_helper,
       InterruptibleRunner* interruptible_runner,
       std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>
@@ -73,7 +73,7 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
 
  private:
   HttpSecAggSendToServerImpl(
-      absl::string_view api_key, Clock* clock,
+      absl::string_view api_key, absl::Clock* clock,
       ProtocolRequestHelper* request_helper,
       InterruptibleRunner* interruptible_runner,
       std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>
@@ -131,7 +131,7 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
   absl::StatusOr<secagg::ServerToClientWrapperMessage> DoR3Unmask(
       secagg::UnmaskingResponse unmasking_response);
   const std::string api_key_;
-  Clock& clock_;
+  absl::Clock& clock_;
   ProtocolRequestHelper& request_helper_;
   InterruptibleRunner& interruptible_runner_;
   std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>

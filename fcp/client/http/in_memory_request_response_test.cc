@@ -35,10 +35,10 @@
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/synchronization/notification.h"
+#include "absl/time/clock_interface.h"
+#include "absl/time/simulated_clock.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/base/compression.h"
-#include "fcp/base/simulated_clock.h"
 #include "fcp/client/cache/file_backed_resource_cache.h"
 #include "fcp/client/cache/test_helpers.h"
 #include "fcp/client/diag_codes.pb.h"
@@ -697,7 +697,7 @@ class PerformRequestsTest : public ::testing::Test {
   InterruptibleRunner interruptible_runner_;
   StrictMock<MockHttpClient> mock_http_client_;
   testing::StrictMock<MockLogManager> log_manager_;
-  SimulatedClock clock_;
+  absl::SimulatedClock clock_;
   std::string root_cache_dir_;
   std::string root_files_dir_;
 };
@@ -800,7 +800,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryWithRetryUnavailableThenOk) {
 
   absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
       mock_http_client_, interruptible_runner_, *std::move(request), nullptr,
-      nullptr, /*clock=*/Clock::RealClock(), &bit_gen_,
+      nullptr, /*clock=*/&absl::Clock::GetRealClock(), &bit_gen_,
       /*retry_max_attempts=*/2,
       /*retry_delay_ms=*/50);
   EXPECT_THAT(result, IsOk());
@@ -823,7 +823,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryWithRetryUnavailableForever) {
 
   absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
       mock_http_client_, interruptible_runner_, *std::move(request), nullptr,
-      nullptr, /*clock=*/Clock::RealClock(), &bit_gen_,
+      nullptr, /*clock=*/&absl::Clock::GetRealClock(), &bit_gen_,
       /*retry_max_attempts=*/2,
       /*retry_delay_ms=*/50);
   EXPECT_THAT(result, StatusIs(absl::StatusCode::kUnavailable));
@@ -1109,9 +1109,8 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailThenRetryBothSuccess) {
           mock_http_client_, interruptible_runner_, std::move(requests),
           // We pass in non-null pointers for the network
           // stats, to ensure they are correctly updated.
-          &bytes_received, &bytes_sent, /*clock=*/Clock::RealClock(), &bit_gen_,
-          /*retry_max_attempts=*/1,
-          /*retry_delay_ms=*/50);
+          &bytes_received, &bytes_sent, /*clock=*/&absl::Clock::GetRealClock(),
+          &bit_gen_, /*retry_max_attempts=*/1, /*retry_delay_ms=*/50);
   ABSL_ASSERT_OK(results);
   ASSERT_EQ(results->size(), 2);
   auto first_response = (*results)[0];

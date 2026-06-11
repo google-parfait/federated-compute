@@ -33,8 +33,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/cache/resource_cache.h"
@@ -74,7 +74,7 @@ inline constexpr absl::string_view kTaskIdentifierPrefix = "task_";
 class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
  public:
   HttpFederatedProtocol(
-      Clock* clock, LogManager* log_manager, const Flags* flags,
+      absl::Clock* clock, LogManager* log_manager, const Flags* flags,
       HttpClient* http_client,
       std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
       SecAggEventPublisher* secagg_event_publisher,
@@ -461,7 +461,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // task_info_map_ for multiple task assignments or default_task_info_ for
   // single task check-in.
   ObjectState object_state_;
-  Clock& clock_;
+  absl::Clock& clock_;
   LogManager* log_manager_;
   const Flags* const flags_;
   HttpClient* const http_client_;

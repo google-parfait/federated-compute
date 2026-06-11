@@ -33,8 +33,8 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
 #include "fcp/client/http/in_memory_request_response.h"
@@ -130,7 +130,7 @@ absl::StatusOr<std::string> CreateUnmaskUriSuffix(
 
 absl::StatusOr<std::unique_ptr<HttpSecAggSendToServerImpl>>
 HttpSecAggSendToServerImpl::Create(
-    absl::string_view api_key, Clock* clock,
+    absl::string_view api_key, absl::Clock* clock,
     ProtocolRequestHelper* request_helper,
     InterruptibleRunner* interruptible_runner,
     std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>
@@ -235,7 +235,7 @@ HttpSecAggSendToServerImpl::AbortSecureAggregation(
           request.SerializeAsString(),
           /*is_protobuf_encoded=*/true));
   std::unique_ptr<InterruptibleRunner> delayed_interruptible_runner =
-      delayed_interruptible_runner_creator_(clock_.Now() +
+      delayed_interruptible_runner_creator_(clock_.TimeNow() +
                                             waiting_period_for_cancellation_);
   ABSL_ASSIGN_OR_RETURN(
       InMemoryHttpResponse response,

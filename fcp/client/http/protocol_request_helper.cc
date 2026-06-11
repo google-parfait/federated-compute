@@ -33,8 +33,8 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/base/time_util.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/http/http_client.h"
@@ -304,8 +304,8 @@ ProtocolRequestCreator::Create(absl::string_view api_key,
 
 ProtocolRequestHelper::ProtocolRequestHelper(
     HttpClient* http_client, int64_t* bytes_downloaded, int64_t* bytes_uploaded,
-    WallClockStopwatch* network_stopwatch, Clock* clock, absl::BitGen* bit_gen,
-    int32_t retry_max_attempts, int32_t retry_delay_ms)
+    WallClockStopwatch* network_stopwatch, absl::Clock* clock,
+    absl::BitGen* bit_gen, int32_t retry_max_attempts, int32_t retry_delay_ms)
     : http_client_(*http_client),
       bytes_downloaded_(*bytes_downloaded),
       bytes_uploaded_(*bytes_uploaded),

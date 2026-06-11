@@ -41,8 +41,8 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/base/compression.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/random_token.h"
@@ -395,7 +395,7 @@ std::string CreateTaskIdentifier(std::optional<int32_t> task_index) {
 }  // namespace
 
 HttpFederatedProtocol::HttpFederatedProtocol(
-    Clock* clock, LogManager* log_manager, const Flags* flags,
+    absl::Clock* clock, LogManager* log_manager, const Flags* flags,
     HttpClient* http_client,
     std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
     SecAggEventPublisher* secagg_event_publisher,

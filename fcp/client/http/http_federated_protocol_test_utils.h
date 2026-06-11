@@ -35,8 +35,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/client/cache/test_helpers.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -443,7 +443,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   StrictMock<cache::MockResourceCache> mock_resource_cache_;
   StrictMock<MockAttestationVerifier>* mock_attestation_verifier_ =
       new StrictMock<MockAttestationVerifier>();
-  Clock* clock_ = Clock::RealClock();
+  absl::Clock* clock_ = &absl::Clock::GetRealClock();
   NiceMock<MockFunction<void(
       const ::fcp::client::FederatedProtocol::EligibilityEvalTask&)>>
       mock_eet_received_callback_;

@@ -31,10 +31,10 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
+#include "absl/time/clock_interface.h"
+#include "absl/time/simulated_clock.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/base/simulated_clock.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/http/http_client.h"
@@ -140,7 +140,7 @@ class HttpSecAggSendToServerImplTest : public ::testing::Test {
   void SetUp() override {
     request_helper_ = std::make_unique<ProtocolRequestHelper>(
         &http_client_, &bytes_downloaded_, &bytes_uploaded_,
-        network_stopwatch_.get(), Clock::RealClock(), &bit_gen_,
+        network_stopwatch_.get(), &absl::Clock::GetRealClock(), &bit_gen_,
         /*retry_max_attempts=*/0,
         /*retry_delay_ms=*/5000);
     runner_ = std::make_unique<InterruptibleRunner>(
@@ -225,7 +225,7 @@ class HttpSecAggSendToServerImplTest : public ::testing::Test {
   // code currently still uses absl::Now() directly, rather than using a more
   // testable "Clock" object. This ensures various timestamps we may encounter
   // are more understandable.
-  SimulatedClock clock_ = SimulatedClock(absl::Now());
+  absl::SimulatedClock clock_{absl::Now()};
   absl::BitGen bit_gen_;
   StrictMock<MockHttpClient> http_client_;
   NiceMock<MockLogManager> log_manager_;

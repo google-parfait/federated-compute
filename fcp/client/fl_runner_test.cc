@@ -41,10 +41,10 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
+#include "absl/time/simulated_clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/digest.h"
 #include "fcp/base/function_registry.h"
-#include "fcp/base/simulated_clock.h"
 #include "fcp/client/cache/temp_files.h"
 #include "fcp/client/client_runner.h"
 #include "fcp/client/engine/common.h"
@@ -265,7 +265,7 @@ class FlRunnerTestBase : public ::testing::Test {
   SelectorContext latest_selector_context_;
   RetryWindow latest_opstats_retry_window_;
   NetworkStats logged_network_stats_;
-  SimulatedClock clock_;
+  absl::SimulatedClock clock_;
 
   ComputationArtifacts single_task_assignment_artifacts_;
   ClientOnlyPlan single_task_assignment_client_only_plan_;

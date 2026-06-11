@@ -37,8 +37,8 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/base/compression.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/cache/resource_cache.h"
@@ -386,7 +386,7 @@ absl::StatusOr<InMemoryHttpResponse> InMemoryHttpRequestCallback::Response()
 absl::StatusOr<InMemoryHttpResponse> PerformRequestInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::unique_ptr<http::HttpRequest> request, int64_t* bytes_received_acc,
-    int64_t* bytes_sent_acc, Clock* clock, absl::BitGen* bit_gen,
+    int64_t* bytes_sent_acc, absl::Clock* clock, absl::BitGen* bit_gen,
     int32_t retry_max_attempts, int32_t retry_delay_ms) {
   // Note: we must explicitly instantiate a vector here as opposed to passing an
   // initializer list to PerformRequestsInMemory, because initializer lists do
@@ -405,7 +405,7 @@ absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
 PerformMultipleRequestsInMemoryWithRetry(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::vector<std::unique_ptr<http::HttpRequest>> requests,
-    int64_t* bytes_received_acc, int64_t* bytes_sent_acc, Clock* clock,
+    int64_t* bytes_received_acc, int64_t* bytes_sent_acc, absl::Clock* clock,
     absl::BitGen* bit_gen, int32_t retry_max_attempts, int32_t retry_delay_ms) {
   if (retry_max_attempts == 0) {
     return PerformMultipleRequestsInMemory(http_client, interruptible_runner,
@@ -487,7 +487,7 @@ FetchResourcesInMemory(HttpClient& http_client,
                        InterruptibleRunner& interruptible_runner,
                        const std::vector<UriOrInlineData>& resources,
                        int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
-                       cache::ResourceCache* resource_cache, Clock* clock,
+                       cache::ResourceCache* resource_cache, absl::Clock* clock,
                        absl::BitGen* bit_gen, int32_t retry_max_attempts,
                        int32_t retry_delay_ms) {
   // Each resource may have the data already available (by having been included

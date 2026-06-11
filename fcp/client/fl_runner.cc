@@ -41,8 +41,8 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
@@ -603,7 +603,7 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
 absl::StatusOr<std::optional<TaskEligibilityInfo>> ComputeNativeEligibility(
     const PopulationEligibilitySpec& population_eligibility_spec,
     LogManager& log_manager, PhaseLogger& phase_logger,
-    OpStatsLogger* opstats_logger, Clock& clock,
+    OpStatsLogger* opstats_logger, absl::Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     EetPlanRunner& eet_plan_runner, const Flags* flags) {
   ABSL_ASSIGN_OR_RETURN(opstats::OpStatsSequence opstats_sequence,
@@ -636,7 +636,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, const absl::Time time_before_checkin,
     const absl::Time time_before_plan_download,
-    const NetworkStats& network_stats, Clock& clock) {
+    const NetworkStats& network_stats, absl::Clock& clock) {
   ClientOnlyPlan plan;
   if (!plan.ParseFromString(eligibility_eval_task.payloads.plan)) {
     auto message = "Failed to parse received eligibility eval plan";
@@ -814,7 +814,7 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
     const TensorflowRunnerFactory& tensorflow_runner_factory,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, FLRunnerResult& fl_runner_result,
-    Clock& clock) {
+    absl::Clock& clock) {
   const absl::Time time_before_checkin = absl::Now();
   const NetworkStats network_stats_before_checkin =
       GetCumulativeNetworkStats(federated_protocol,
@@ -1759,7 +1759,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         opstats_logger->GetInitStatus());
   }
 
-  Clock* clock = Clock::RealClock();
+  absl::Clock* clock = &absl::Clock::GetRealClock();
   std::unique_ptr<cache::ResourceCache> resource_cache;
   if (flags->max_resource_cache_size_bytes() > 0) {
     // Anything that goes wrong in FileBackedResourceCache::Create is a
@@ -1829,7 +1829,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     FederatedSelectManager* fedselect_manager,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, const std::string& session_name,
-    const std::string& population_name, Clock& clock) {
+    const std::string& population_name, absl::Clock& clock) {
   SelectorContext federated_selector_context;
   federated_selector_context.mutable_computation_properties()->set_session_name(
       session_name);

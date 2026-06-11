@@ -40,8 +40,8 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/clock_interface.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/base/time_util.h"
@@ -103,7 +103,7 @@ absl::Status FileBackedResourceCache::WriteInternal(
 absl::StatusOr<std::unique_ptr<FileBackedResourceCache>>
 FileBackedResourceCache::Create(absl::string_view base_dir,
                                 absl::string_view cache_dir,
-                                LogManager* log_manager, fcp::Clock* clock,
+                                LogManager* log_manager, absl::Clock* clock,
                                 int64_t max_cache_size_bytes,
                                 bool sanitize_client_cache_id) {
   // Create <cache root>/fcp.
@@ -179,7 +179,7 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
                               ? absl::WebSafeBase64Escape(cache_id_str)
                               : cache_id_str;
   std::filesystem::path cached_file_path = cache_dir_path_ / file_name;
-  absl::Time now = clock_.Now();
+  absl::Time now = clock_.TimeNow();
   absl::Time expiry = now + max_age;
   CachedResource cached_resource;
   cached_resource.set_file_name(file_name);
@@ -239,7 +239,7 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
       sanitize_client_cache_id_ ? cached_resource.file_name() : cache_id_str;
   std::filesystem::path cached_file_path = cache_dir_path_ / file_name;
   google::protobuf::Any metadata = cached_resource.metadata();
-  absl::Time now = clock_.Now();
+  absl::Time now = clock_.TimeNow();
   *cached_resource.mutable_last_accessed_time() =
       TimeUtil::ConvertAbslToProtoTimestamp(now);
   if (max_age.has_value()) {
@@ -358,7 +358,7 @@ absl::Status FileBackedResourceCache::CleanUp(
   max_allowed_size_bytes -= reserved_space_bytes.value_or(0);
 
   std::set<std::string> cache_ids_to_delete;
-  absl::Time now = clock_.Now();
+  absl::Time now = clock_.TimeNow();
   for (const auto& [id, resource] : manifest.cache()) {
     absl::Time expiry =
         TimeUtil::ConvertProtoToAbslTime(resource.expiry_time());

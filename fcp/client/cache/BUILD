@@ -93,7 +93,6 @@ cc_library(
         ":cache_manifest_cc_proto",
         ":resource_cache",
         "//fcp/base",
-        "//fcp/base:clock",
         "//fcp/base:time_util",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interfaces",
@@ -107,6 +106,7 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
+        "@com_google_absl//absl/time:clock_interface",
         "@com_google_protobuf//:any_cc_proto",
         "@com_google_protobuf//:timestamp_cc_proto",
         "@protodatastore_cpp//protostore:file-storage",
@@ -119,7 +119,6 @@ cc_test(
     srcs = ["file_backed_resource_cache_test.cc"],
     deps = [
         ":file_backed_resource_cache",
-        "//fcp/base:simulated_clock",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:selector_context_cc_proto",
         "//fcp/client:test_helpers",
@@ -129,6 +128,7 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/time",
+        "@com_google_absl//absl/time:simulated_clock",
         "@com_google_googletest//:gtest_main",
     ],
 )
