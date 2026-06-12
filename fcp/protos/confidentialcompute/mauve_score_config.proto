@@ -1,0 +1,75 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";  // Our OSS build does not support editions.
+
+package fcp.confidentialcompute;
+
+option java_multiple_files = true;
+option java_package = "com.google.intelligence.fcp.confidentialcompute";
+option java_outer_classname = "MauveScoreConfigProto";
+
+// Configures the MauveScore container initialization.
+message MauveScoreContainerInitializeConfiguration {
+  // The configuration_id for the synthetic data embeddings blob. It should
+  // match
+  // StreamInitializeRequest.write_configuration.first_request_metadata.configuration_id
+  // for the synthetic data embeddings blob.
+  // The blob is a file containing Embedding proto messages for synthetic data.
+  string synthetic_data_embeddings_configuration_id = 1;
+}
+
+// KL divergence metrics for a specific lambda value.
+// See go/kl-coverage-fidelity for details.
+message KlMetric {
+  // The lambda value used for soft KL divergence computation.
+  float lambda_soft = 1;
+  // Soft approximation of KL(P_real || Q_synth).
+  // Measures how well synthetic data covers the real data distribution.
+  float kl_coverage_penalty = 2;
+  // Soft approximation of KL(Q_synth || P_real).
+  // Measures how faithful the synthetic data is to the real data distribution.
+  float kl_fidelity_penalty = 3;
+}
+
+// The result of a MAUVE score computation.
+// MAUVE is a measure of text similarity based on text embeddings.
+// See https://arxiv.org/abs/2102.01454 for details.
+message MauveScoreResult {
+  // The MAUVE AUC score (area under the divergence curve).
+  float mauve_auc = 1;
+
+  // Number of k-means clusters used to discretize the embedding space.
+  int32 num_clusters = 2;
+
+  // Cluster count metrics from the 2x2 contingency table.
+  // Clusters containing at least one real AND one synthetic example.
+  int32 clusters_with_real_and_synth = 3;
+  // Clusters containing at least one real example but no synthetic examples.
+  int32 clusters_with_real_only = 4;
+  // Clusters containing at least one synthetic example but no real examples.
+  int32 clusters_with_synth_only = 5;
+  // Clusters containing neither real nor synthetic examples.
+  int32 clusters_empty = 6;
+
+  // Cluster-level recall: fraction of clusters with real data that also
+  // contain synthetic data.
+  float recall = 7;
+  // Cluster-level precision: fraction of clusters with synthetic data that
+  // also contain real data.
+  float precision = 8;
+
+  // KL divergence metrics computed at various lambda values.
+  repeated KlMetric kl_metrics = 9;
+}
