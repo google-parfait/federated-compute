@@ -264,7 +264,7 @@ absl::StatusOr<std::unique_ptr<OpStatsDb>> PdsBackedOpStatsDb::Create(
   lock_releaser = [db_path, fd]() { ReleaseFileLock(db_path, fd); };
   pds = std::make_unique<protostore::ProtoDataStore<OpStatsSequence>>(
       *file_storage, db_path);
-  absl::StatusOr<int64_t> file_size = file_storage->GetFileSize(path);
+  absl::StatusOr<int64_t> file_size = file_storage->GetFileSize(db_path);
   if (!file_size.ok()) {
     lock_releaser();
     return file_size.status();
