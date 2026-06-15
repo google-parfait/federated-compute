@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_applicable_licenses = ["//fcp:license"],
@@ -32,5 +33,25 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_library(
+    name = "willow_nonce",
+    srcs = ["willow_nonce.cc"],
+    hdrs = ["willow_nonce.h"],
+    deps = [
+        "//fcp/base:random_token",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "willow_nonce_test",
+    srcs = ["willow_nonce_test.cc"],
+    deps = [
+        ":willow_nonce",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
     ],
 )

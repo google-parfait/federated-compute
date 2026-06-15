@@ -29,8 +29,9 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "fcp/base/random_token.h"
+#include "absl/time/clock.h"
 #include "fcp/client/federated_protocol.h"
+#include "fcp/client/willow/willow_nonce.h"
 #include "fcp/confidentialcompute/client_payload.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
 #include "third_party/secure_aggregation/willow/api/client.h"
@@ -117,8 +118,10 @@ WillowPayloadEncryptorImpl::EncryptAndSerializePayload(
   }
   std::string key_id = key_proto.key_id();
 
-  // Generate the nonce and use it as blob_id.
-  std::string nonce = fcp::RandomToken::Generate().ToString();
+  // Generate a timestamp-prefixed nonce and use it as blob_id.
+  // The nonce format is [32-bit timestamp since 2026-01-01 UTC] || [96-bit
+  // random], enabling time-based compaction of ciphertexts.
+  std::string nonce = GenerateTimestampPrefixedNonce(absl::Now());
   fcp::confidentialcompute::BlobHeader blob_header;
   blob_header.set_blob_id(nonce);
   blob_header.set_key_id(key_id);
