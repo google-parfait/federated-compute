@@ -434,8 +434,8 @@ Matcher<const TestTracingRecorder::SpanOrEvent&> IsSpan(M... field_matchers) {
   static_assert(TracingTraits<FlatBufferTable>::kIsSpan,
                 "FlatBufferTable must be a span");
   if constexpr (sizeof...(M) != 0) {
-    constexpr size_t number_of_fields = std::tuple_size<
-        typename TracingTraits<FlatBufferTable>::TupleType>::value;
+    constexpr size_t number_of_fields =
+        std::tuple_size_v<typename TracingTraits<FlatBufferTable>::TupleType>;
     static_assert(
         sizeof...(M) == number_of_fields,
         "Matchers must be provided for every field in FlatBufferTable");
