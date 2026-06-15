@@ -251,16 +251,14 @@ MAKE_LINK(B1, a::A3);
 
 }  // namespace links
 
-static_assert(std::is_same<LinkedType<links::a::A1>, links::a::A2>::value,
+static_assert(std::is_same_v<LinkedType<links::a::A1>, links::a::A2>,
               "A1 -> A2");
 static_assert(HasLinkedType<links::a::A1>(), "A1 -> A2");
-static_assert(std::is_same<LinkedTypeOrVoid<links::a::A2>, void>::value,
-              "A2 -/>");
+static_assert(std::is_same_v<LinkedTypeOrVoid<links::a::A2>, void>, "A2 -/>");
 static_assert(!HasLinkedType<links::a::A2>(), "A2 -/>");
-static_assert(std::is_same<LinkedTypeOrVoid<links::a::A3>, void>::value,
-              "A3 -/>");
+static_assert(std::is_same_v<LinkedTypeOrVoid<links::a::A3>, void>, "A3 -/>");
 static_assert(!HasLinkedType<links::a::A3>(), "A3 -/>");
-static_assert(std::is_same<LinkedType<links::b::B1>, links::a::A3>::value,
+static_assert(std::is_same_v<LinkedType<links::b::B1>, links::a::A3>,
               "b::B1 -> a::A3");
 static_assert(HasLinkedType<links::b::B1>(), "b::B1 -> a::A3");
 
@@ -270,8 +268,8 @@ static_assert(HasLinkedType<links::b::B1>(), "b::B1 -> a::A3");
 
 template<typename A1, typename A2, size_t I1, size_t I2>
 constexpr Unit CheckUnpack() {
-  static_assert(std::is_same<A1, X>::value, "A1 == X");
-  static_assert(std::is_same<A2, Y>::value, "A2 == Y");
+  static_assert(std::is_same_v<A1, X>, "A1 == X");
+  static_assert(std::is_same_v<A2, Y>, "A2 == Y");
   static_assert(I1 == 0, "I1 == 0");
   static_assert(I2 == 1, "I2 == 0");
   return {};

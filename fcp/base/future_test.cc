@@ -59,8 +59,7 @@ enum class V { kInvalid, kValid };
 // assertions (e.g. Eq matcher) are difficult to use with move-only types.
 using UV = UniqueValue<Unit>;
 
-static_assert(!std::is_copy_constructible<UV>::value,
-              "Expected to be move-only");
+static_assert(!std::is_copy_constructible_v<UV>, "Expected to be move-only");
 
 std::optional<V> TakeV(Future<UV> future) {
   std::optional<UV> maybe_uv = std::move(future).Take();

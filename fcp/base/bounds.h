@@ -42,16 +42,16 @@ namespace fcp {
  */
 template <typename To, typename From>
 bool TryCastInteger(From from, To* to) {
-  static_assert(std::is_integral<To>::value && std::is_integral<From>::value,
+  static_assert(std::is_integral_v<To> && std::is_integral_v<From>,
                 "Both types must be integral");
 
-  if (std::is_signed<From>::value == std::is_signed<To>::value) {
+  if (std::is_signed_v<From> == std::is_signed_v<To>) {
     // Same sign: Easy!
     if (from < std::numeric_limits<To>::min() ||
         from > std::numeric_limits<To>::max()) {
       return false;
     }
-  } else if (std::is_signed<From>::value && !std::is_signed<To>::value) {
+  } else if (std::is_signed_v<From> && !std::is_signed_v<To>) {
     // Signed => Unsigned: Widening conversion would sign-extend 'from' first;
     // i.e. -1 would look larger than To's min(). Negative values are definitely
     // out of range anyway.  Positive values are effectively zero-extended,

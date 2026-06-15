@@ -78,7 +78,7 @@ class MoveToLambdaWrapper {
 template <typename T>
 MoveToLambdaWrapper<std::remove_reference_t<T>> MoveToLambda(T&& value) {
   static_assert(
-      std::is_rvalue_reference<T&&>::value,
+      std::is_rvalue_reference_v<T&&>,
       "Expected an rvalue: If the value is copied anyway (to this function), "
       "you might as well put it in the lambda-capture list directly.");
   return MoveToLambdaWrapper<std::remove_reference_t<T>>(

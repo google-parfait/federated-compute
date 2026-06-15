@@ -150,15 +150,14 @@ struct Pack {
  */
 template <typename T>
 constexpr bool FailIfReached() {
-  return !std::is_same<T, T>::value;
+  return !std::is_same_v<T, T>;
 }
 
 namespace meta_internal {
 
 template <typename T, T M>
 struct MemberTag {
-  static_assert(std::is_member_pointer<T>::value,
-                "Expected a member-pointer type");
+  static_assert(std::is_member_pointer_v<T>, "Expected a member-pointer type");
 };
 
 template <typename CastOp, typename... T>
@@ -382,7 +381,7 @@ using LinkedTypeOrVoid = typename decltype(meta_internal::LookupTypeLink(
  */
 template <typename T>
 constexpr bool HasLinkedType() {
-  return !std::is_same<LinkedTypeOrVoid<T>, void>::value;
+  return !std::is_same_v<LinkedTypeOrVoid<T>, void>;
 }
 
 /**
