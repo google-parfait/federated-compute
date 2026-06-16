@@ -28,7 +28,6 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/scheduler.h"
-#include "fcp/base/simulated_clock.h"
 
 namespace fcp {
 namespace secagg {
@@ -105,43 +104,6 @@ TEST(SecAggSchedulerTest, SingleCall) {
   }
   accumulator->SetAsyncObserver(
       [&]() { result = *(accumulator->GetResultAndCancel()); });
-  EXPECT_THAT(result.value, Eq(720));  // 6! = 720
-}
-
-TEST(SecAggSchedulerTest, SingleCallWithDelay) {
-  StrictMock<MockScheduler> parallel_scheduler;
-  StrictMock<MockScheduler> sequential_scheduler;
-  SimulatedClock clock;
-
-  EXPECT_CALL(parallel_scheduler, Schedule(_)).Times(6).WillRepeatedly(call_fn);
-  EXPECT_CALL(sequential_scheduler, Schedule(_))
-      .Times(6)
-      .WillRepeatedly(call_fn);
-
-  SecAggScheduler runner(&parallel_scheduler, &sequential_scheduler, &clock);
-
-  std::vector<std::function<std::unique_ptr<Integer>()>> generators =
-      IntGenerators(6);
-
-  Integer result;
-  auto accumulator = runner.CreateAccumulator<Integer>(
-      std::make_unique<Integer>(1), multiply_accumulator);
-  for (const auto& generator : generators) {
-    accumulator->Schedule(generator, absl::Seconds(5));
-  }
-  accumulator->SetAsyncObserver(
-      [&]() { result = *(accumulator->GetResultAndCancel()); });
-
-  // Generators are still delayed.
-  EXPECT_THAT(result.value, Eq(0));
-
-  // Advance time by one second.
-  clock.AdvanceTime(absl::Seconds(1));
-  // Generators are still delayed.
-  EXPECT_THAT(result.value, Eq(0));
-
-  // Advance time by another 4 seconds.
-  clock.AdvanceTime(absl::Seconds(4));
   EXPECT_THAT(result.value, Eq(720));  // 6! = 720
 }
 

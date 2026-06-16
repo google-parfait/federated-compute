@@ -428,66 +428,6 @@ cc_test(
 )
 
 cc_library(
-    name = "clock",
-    srcs = [
-        "clock.cc",
-    ],
-    hdrs = [
-        "clock.h",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":base",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
-    ],
-)
-
-cc_library(
-    name = "simulated_clock",
-    testonly = 1,
-    srcs = [
-        "simulated_clock.cc",
-    ],
-    hdrs = [
-        "simulated_clock.h",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":clock",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
-    ],
-)
-
-cc_test(
-    name = "simulated_clock_test",
-    srcs = [
-        "simulated_clock_test.cc",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":simulated_clock",
-        "@com_google_absl//absl/time",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_test(
-    name = "realtime_clock_test",
-    srcs = [
-        "realtime_clock_test.cc",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":clock",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
     name = "time_util",
     srcs = ["time_util.cc"],
     hdrs = ["time_util.h"],
@@ -525,7 +465,6 @@ cc_test(
     srcs = ["wall_clock_stopwatch_test.cc"],
     copts = FCP_COPTS,
     deps = [
-        ":clock",
         ":scheduler",
         ":wall_clock_stopwatch",
         "@com_google_absl//absl/time",

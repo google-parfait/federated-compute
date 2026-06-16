@@ -352,11 +352,9 @@ cc_library(
     ],
     deps = [
         "//fcp/base",
-        "//fcp/base:clock",
         "//fcp/base:reentrancy_guard",
         "//fcp/base:scheduler",
         "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
     ],
 )
 
@@ -368,7 +366,6 @@ cc_test(
         ":secagg_scheduler",
         "//fcp/base",
         "//fcp/base:scheduler",
-        "//fcp/base:simulated_clock",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",

@@ -21,7 +21,6 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/time/time.h"
-#include "fcp/base/clock.h"
 #include "fcp/base/scheduler.h"
 
 namespace fcp {
