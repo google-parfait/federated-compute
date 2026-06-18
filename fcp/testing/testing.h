@@ -122,8 +122,8 @@ class ProtoMatcher {
   template <typename U>
   operator testing::Matcher<U>() const {  // NOLINT
     using V = std::remove_cv_t<std::remove_reference_t<U>>;
-    static_assert(std::is_base_of<google::protobuf::Message, V>::value &&
-                  !std::is_same<google::protobuf::Message, V>::value);
+    static_assert(std::is_base_of_v<google::protobuf::Message, V> &&
+                  !std::is_same_v<google::protobuf::Message, V>);
     return ::testing::MakeMatcher(new ProtoMatcherImpl<U>(arg_));
   }
 
@@ -132,10 +132,9 @@ class ProtoMatcher {
 };
 
 // Proto matcher that takes another proto message reference as an argument.
-template <class T,
-          typename std::enable_if<std::is_base_of<google::protobuf::Message, T>::value &&
-                                      !std::is_same<google::protobuf::Message, T>::value,
-                                  int>::type = 0>
+template <class T, std::enable_if_t<std::is_base_of_v<google::protobuf::Message, T> &&
+                                        !std::is_same_v<google::protobuf::Message, T>,
+                                    int> = 0>
 inline ProtoMatcher<T> EqualsProto(const T& arg) {
   return ProtoMatcher<T>(arg);
 }
