@@ -18,3 +18,12 @@ message ConstructUserSessionInitConfig {
   // confidential_compute_event_time.
   string on_device_query_name = 3;
 }
+
+// Time-window related metadata for the constructed user session.
+message SessionTimeWindowMetadata {
+  // The start of the session time window. Inclusive.
+  google.protobuf.Timestamp session_window_start = 1;
+
+  // The end of the session time window. Exclusive.
+  google.protobuf.Timestamp session_window_end = 2;
+}

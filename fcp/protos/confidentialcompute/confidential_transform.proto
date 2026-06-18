@@ -189,18 +189,14 @@ message ConfigureResponse {
   reserved 1, 2, 3;
 }
 
-// Metadata that isn't sensitive and can be visible to the untrusted side, but
-// should be made tamper-proof as part of the associated data.
+// Associated metadata for a blob that is cryptographically bound to it.
 message AssociatedMetadata {
-  // The start of the session time window. Inclusive.
-  google.protobuf.Timestamp session_window_start = 1;
-
-  // The end of the session time window. Exclusive.
-  google.protobuf.Timestamp session_window_end = 2;
-
-  // The COSE "kid" property (RFC 9052) of the asymmetric key used to encrypt
-  // the symmetric key.
-  bytes key_id = 3;
+  // A list of associated metadata values.
+  //
+  // It is up to the containers producing and consuming metadata to
+  // determine how associated metadata values should be handled. This
+  // includes whether repeated values with the same type_url are allowed.
+  repeated google.protobuf.Any metadata = 1;
 }
 
 // Encodes metadata about a blob that is written to or read from the
@@ -252,21 +248,33 @@ message BlobMetadata {
     // The ephemeral Diffie-Hellman key needed to derive the symmetric key.
     bytes encapsulated_public_key = 5;
 
-    // Components which will be appended together to create the associated data
-    // to be used for decryption of the symmetric key by a trusted worker that
-    // is pre-authorized by KMS. This associated data should be used along with
-    // decryption keys provided by KMS.
+    // Associated data to be used for decryption of the symmetric key by a
+    // trusted worker that is pre-authorized by KMS. This associated data should
+    // be used along with decryption keys provided by KMS.
     message KmsAssociatedData {
-      // A serialized `fcp.confidentialcompute.BlobHeader`.
-      bytes record_header = 1;
+      // A serialized `fcp.confidentialcompute.BlobHeader`. This field is
+      // deprecated; fcp.confidentialcompute.BlobHeader should be passed as
+      // `associated_metadata` below instead.
+      bytes record_header = 1 [deprecated = true];
 
-      // A serialized `fcp.confidentialcompute.AssociatedMetadata`.
-      bytes associated_metadata = 2;
+      // Associated data (AAD) for decryption.
+      // The `value` (payload) bytes of the `Any` message contain the associated
+      // data itself, while the `type_url` indicates how the payload is to be
+      // parsed. Note that only the `value` bytes are used as AAD for
+      // decryption; the `type_url` is not included in the AAD.
+      // This is typically a `fcp.confidentialcompute.AssociatedMetadata`
+      // message but until all clients migrate to it, this field can also
+      // contain `fcp.confidentialcompute.BlobHeader`.
+      google.protobuf.Any associated_metadata = 2;
     }
 
     // The ID of the blob. This must match the ID in the blob's
     // `fcp.confidentialcompute.BlobHeader`.
     bytes blob_id = 7;
+
+    // The COSE "kid" property (RFC 9052) of the asymmetric key used to
+    // encrypt the symmetric key.
+    bytes key_id = 9;
 
     reserved 3, 4, 6;
   }
