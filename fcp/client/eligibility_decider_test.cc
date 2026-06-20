@@ -824,8 +824,6 @@ TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodTooYoungIneligible) {
   EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
       .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
-      .WillRepeatedly(Return(true));
 
   PopulationEligibilitySpec spec;
 
@@ -865,8 +863,6 @@ TEST_F(EligibilityDeciderTest,
 TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodExceededEligible) {
   EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
-      .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
   EXPECT_CALL(
       mock_log_manager_,
@@ -928,8 +924,6 @@ TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodExceededIneligible) {
   EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
       .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
-      .WillRepeatedly(Return(true));
 
   PopulationEligibilitySpec spec;
 
@@ -985,8 +979,6 @@ TEST_F(EligibilityDeciderTest,
 TEST_F(EligibilityDeciderTest, MinSepPolicyNoMinTrustworthinessPeriodEligible) {
   EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
       .WillRepeatedly(Return(false));
-  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
-      .WillRepeatedly(Return(true));
   EXPECT_CALL(
       mock_log_manager_,
       LogToLongHistogram(HistogramCounters::TRAINING_FL_ROUND_SEPARATION,
@@ -1038,8 +1030,6 @@ TEST_F(EligibilityDeciderTest,
        MinSepPolicyNoMinTrustworthinessPeriodInEligible) {
   EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
       .WillRepeatedly(Return(false));
-  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
-      .WillRepeatedly(Return(true));
 
   PopulationEligibilitySpec spec;
 
@@ -1082,61 +1072,6 @@ TEST_F(EligibilityDeciderTest,
   ASSERT_EQ(eligibility_result->task_weights_size(), 2);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
   ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 0.0f);
-}
-
-TEST_F(EligibilityDeciderTest, MinSepPolicyWithTrustworthinessCheckDisabled) {
-  EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
-      .WillRepeatedly(Return(false));
-  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
-      .WillRepeatedly(Return(false));
-
-  PopulationEligibilitySpec spec;
-  EligibilityPolicyEvalSpec* min_sep_spec =
-      spec.mutable_eligibility_policies()->Add();
-  min_sep_spec->set_name("min_sep:3;current_index:6");
-  min_sep_spec->set_min_version(1);
-  min_sep_spec->mutable_min_sep_policy()->set_current_index(6);
-  min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
-
-  EligibilityPolicyEvalSpec* min_sep_spec_with_min_trust =
-      spec.mutable_eligibility_policies()->Add();
-  min_sep_spec_with_min_trust->set_name("min_sep:3;current_index:6");
-  min_sep_spec_with_min_trust->set_min_version(1);
-  min_sep_spec_with_min_trust->mutable_min_sep_policy()->set_current_index(6);
-  min_sep_spec_with_min_trust->mutable_min_sep_policy()->set_minimum_separation(
-      3);
-  min_sep_spec_with_min_trust->mutable_min_sep_policy()
-      ->mutable_min_trustworthiness_period()
-      ->set_seconds(4);
-  // task 1 is applied with the min sep policy without
-  // min_trustworthiness_period and has never been executed.
-  PopulationEligibilitySpec::TaskInfo* task_info1 =
-      spec.mutable_task_info()->Add();
-  task_info1->set_task_name("single_task_1");
-  task_info1->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
-  task_info1->mutable_eligibility_policy_indices()->Add(0);
-  // task 2 is applied with the min sep policy with min_trustworthiness_period
-  // and has never been executed.
-  PopulationEligibilitySpec::TaskInfo* task_info2 =
-      spec.mutable_task_info()->Add();
-  task_info2->set_task_name("single_task_2");
-  task_info2->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
-  task_info2->mutable_eligibility_policy_indices()->Add(1);
-
-  // OpstatsDb is younger than the required min trustworthiness period.
-  opstats::OpStatsSequence opstats_sequence;
-
-  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
-      spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
-      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
-      &mock_flags_);
-  ABSL_ASSERT_OK(eligibility_result);
-  ASSERT_EQ(eligibility_result->task_weights_size(), 2);
-  // Both tasks are eligible as the trustworthiness check is disabled.
-  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
-  ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 1.0f);
 }
 
 }  // namespace client

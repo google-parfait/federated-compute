@@ -260,24 +260,22 @@ absl::flat_hash_set<std::string> ComputeMinimumSeparationPolicyEligibility(
     const absl::flat_hash_set<std::string>& task_names,
     const opstats::OpStatsSequence& opstats_sequence, absl::Clock& clock,
     const Flags& flags, LogManager& log_manager) {
-  if (flags.check_trustworthiness_for_min_sep_policy()) {
-    // First, check that the policy's min trustworthiness period does not exceed
-    // the opstats db's trustworthiness timestamp if it is set. This timestamp
-    // tracks when the opstats db was initialized, so if the required min
-    // trustworthiness period covers a time span beyond this timestamp, it can
-    // not be guaranteed that the client did not successfully participate within
-    // the period.
-    absl::Duration min_period = fcp::TimeUtil::ConvertProtoToAbslDuration(
-        min_sep_policy.min_trustworthiness_period());
-    if (min_period != absl::ZeroDuration()) {
-      absl::Time now = clock.TimeNow();
-      absl::Duration trustworthiness_period =
-          now - fcp::TimeUtil::ConvertProtoToAbslTime(
-                    opstats_sequence.earliest_trustworthy_time());
-      if (trustworthiness_period < min_period) {
-        // No tasks eligible, return empty set
-        return {};
-      }
+  // First, check that the policy's min trustworthiness period does not exceed
+  // the opstats db's trustworthiness timestamp if it is set. This timestamp
+  // tracks when the opstats db was initialized, so if the required min
+  // trustworthiness period covers a time span beyond this timestamp, it can
+  // not be guaranteed that the client did not successfully participate within
+  // the period.
+  absl::Duration min_period = fcp::TimeUtil::ConvertProtoToAbslDuration(
+      min_sep_policy.min_trustworthiness_period());
+  if (min_period != absl::ZeroDuration()) {
+    absl::Time now = clock.TimeNow();
+    absl::Duration trustworthiness_period =
+        now - fcp::TimeUtil::ConvertProtoToAbslTime(
+                  opstats_sequence.earliest_trustworthy_time());
+    if (trustworthiness_period < min_period) {
+      // No tasks eligible, return empty set
+      return {};
     }
   }
 

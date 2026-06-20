@@ -708,8 +708,6 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, enable_confidential_aggregation, (), (const, override));
   MOCK_METHOD(bool, enable_willow_secure_aggregation, (), (const, override));
-  MOCK_METHOD(bool, check_trustworthiness_for_min_sep_policy, (),
-              (const, override));
   MOCK_METHOD(bool, enable_direct_data_upload_task, (), (const, override));
   MOCK_METHOD(bool, enable_relative_uri_prefix, (), (const, override));
   MOCK_METHOD(bool, log_min_sep_index_to_phase_stats, (), (const, override));

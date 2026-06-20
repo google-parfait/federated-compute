@@ -184,13 +184,6 @@ class Flags {
   // If true, confidential aggregation is advertised & can be used for uploads.
   virtual bool enable_confidential_aggregation() const { return false; }
 
-  // If true, the minimum separation policy will first check if the OpStatsDb's
-  // earliest trustworthy time is earlier than the required minimum
-  // trustworthiness period.
-  virtual bool check_trustworthiness_for_min_sep_policy() const {
-    return false;
-  }
-
   // If true, direct data upload tasks are supported.
   virtual bool enable_direct_data_upload_task() const { return false; }
 
