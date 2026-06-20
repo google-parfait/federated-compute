@@ -184,9 +184,6 @@ class Flags {
   // If true, confidential aggregation is advertised & can be used for uploads.
   virtual bool enable_confidential_aggregation() const { return false; }
 
-  // If true, direct data upload tasks are supported.
-  virtual bool enable_direct_data_upload_task() const { return false; }
-
   // If true, adds support for relative URI prefixes.
   virtual bool enable_relative_uri_prefix() const { return false; }
 

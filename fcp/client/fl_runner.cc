@@ -281,12 +281,7 @@ absl::Status ValidateStructuredExampleQuery(
 // missing in AggregationConfig or the AggregationConfig is not supported.
 absl::Status ValidateDirectExampleQuery(
     const ExampleQuerySpec::ExampleQuery& example_query,
-    const ::google::protobuf::Map<std::string, AggregationConfig>& aggregations,
-    bool enable_direct_data_upload_task) {
-  if (!enable_direct_data_upload_task) {
-    return absl::InvalidArgumentError(
-        "Direct data upload task is not enabled.");
-  }
+    const ::google::protobuf::Map<std::string, AggregationConfig>& aggregations) {
   if (aggregations.find(example_query.direct_output_tensor_name()) ==
       aggregations.end()) {
     return absl::InvalidArgumentError(
@@ -341,8 +336,6 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
         engine::PlanOutcome::kInvalidArgument, protocol_config.status()));
   }
 
-  const bool enable_direct_data_upload_task =
-      flags->enable_direct_data_upload_task();
   for (const auto& example_query :
        client_phase.example_query_spec().example_queries()) {
     if (!(example_query.output_vector_specs().empty() ^
@@ -359,8 +352,7 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
       status = ValidateStructuredExampleQuery(example_query, aggregations);
     } else {
       // Direct example query.
-      status = ValidateDirectExampleQuery(example_query, aggregations,
-                                          enable_direct_data_upload_task);
+      status = ValidateDirectExampleQuery(example_query, aggregations);
     }
     if (!status.ok()) {
       return PlanResultAndCheckpointFile(

@@ -2793,8 +2793,6 @@ TEST_F(FlRunnerExampleQueryTest, ConfidentialAggInSelectorContext) {
 }
 
 TEST_F(FlRunnerExampleQueryTest, DirectDataUploadTaskSucceeds) {
-  EXPECT_CALL(mock_flags_, enable_direct_data_upload_task())
-      .WillRepeatedly(Return(true));
   SetUpDirectDataUploadTask();
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
@@ -2841,18 +2839,8 @@ TEST_F(FlRunnerExampleQueryTest, DirectDataUploadTaskSucceeds) {
                             VariantWith<FCCheckpoints>(Not(IsEmpty())))));
 }
 
-TEST_F(FlRunnerExampleQueryTest, DirectDataUploadTaskNotEnabled) {
-  EXPECT_CALL(mock_flags_, enable_direct_data_upload_task())
-      .WillRepeatedly(Return(false));
-  SetUpDirectDataUploadTask();
-
-  ExpectComputationFailureWithInvalidArgument();
-}
-
 TEST_F(FlRunnerExampleQueryTest,
        DirectDataUploadTaskWithUnsupportedAggregation) {
-  EXPECT_CALL(mock_flags_, enable_direct_data_upload_task())
-      .WillRepeatedly(Return(true));
   SetUpDirectDataUploadTask();
 
   AggregationConfig unsupported_aggregation;
@@ -3830,7 +3818,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_2->set_task_name(kTaskName);
   task_weight_2->set_weight(1);
 
-
   // Mock a multiple task assignment request which 1) the artifact uris for all
   // of the requested tasks are received; 2) one of the downloaded artifacts is
   // invalid.
@@ -4305,7 +4292,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight->set_task_name(kRequires5ExamplesTaskName);
   task_weight->set_weight(1);
 
-
   // Mock a successful multiple task assignment request.
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
   multiple_task_assignments.task_assignments[kRequires5ExamplesTaskName] =
@@ -4423,7 +4409,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
   task_weight_2->set_task_name(kRequires5ExamplesTaskName);
   task_weight_2->set_weight(1);
-
 
   // Mock a successful multiple task assignment request.
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
@@ -4894,8 +4879,6 @@ TEST_F(FlRunnerEligibilityEvalTest,
   EXPECT_THAT(*result, EqualsProto(expected_result));
 }
 
-
-
 TEST_F(FlRunnerMultipleTaskAssignmentsTest,
        AttestationMeasurementCallbackEnabled_MultipleTaskAssignment) {
   SetUpEligibilityEvalTask();
@@ -4929,7 +4912,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
   task_weight_2->set_task_name(kRequires5ExamplesTaskName);
   task_weight_2->set_weight(1);
-
 
   std::string attestation_measurement = "test_attestation_measurement";
   EXPECT_CALL(mock_task_env_, GetAttestationMeasurement(Eq(content_binding)))
@@ -5043,7 +5025,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_));
 }
-
 
 }  // namespace
 }  // namespace client
