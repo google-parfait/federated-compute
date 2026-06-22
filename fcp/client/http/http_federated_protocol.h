@@ -263,12 +263,6 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
                                            absl::Duration plan_duration,
                                            PerTaskInfo& task_info);
 
-  // Helper function to perform a StartDataUploadRequest and a ReportTaskResult
-  // request concurrently.
-  // This method will only return the response from the StartDataUploadRequest.
-  absl::StatusOr<InMemoryHttpResponse>
-  PerformStartDataUploadRequestAndReportTaskResult(absl::Duration plan_duration,
-                                                   PerTaskInfo& task_info);
 
   // Helper function to perform `num_data_uploads` StartDataUpload requests and
   // a ReportTaskResult request concurrently. This method will only return the

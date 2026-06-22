@@ -388,8 +388,7 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
     const std::string& output_checkpoint_filename,
     bool use_client_report_wire_format, bool enable_event_time_data_upload,
     std::optional<absl::string_view> source_id, bool uses_confidential_agg,
-    bool enable_privacy_id_generation, bool enable_private_logger,
-    bool drop_out_based_data_availability) {
+    bool enable_private_logger, bool drop_out_based_data_availability) {
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
   bool has_event_time_range = false;
@@ -397,8 +396,7 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
       structured_example_query_results;
   absl::flat_hash_map<std::string, std::vector<std::string>>
       direct_example_query_results;
-  bool split_results_by_privacy_id = enable_privacy_id_generation &&
-                                     example_query_spec.has_privacy_id_config();
+  bool split_results_by_privacy_id = example_query_spec.has_privacy_id_config();
   // Checkpoint builders and metadata for each privacy ID. If
   // split_results_by_privacy_id is true, we want results with the same privacy
   // ID in the same checkpoint, regardless of what ExampleQuery they came from.
@@ -496,8 +494,7 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
 
       if (split_results_by_privacy_id) {
         if (!source_id.has_value()) {
-          // Source ID is set by fl_runner if enable_privacy_id_generation is
-          // true, so we should never reach this point.
+          // Source ID is set by fl_runner, so we should never reach this point.
           return PlanResult(
               PlanOutcome::kExampleIteratorError,
               absl::InvalidArgumentError("Source ID is required for privacy ID "

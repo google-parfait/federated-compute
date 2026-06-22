@@ -315,7 +315,7 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
     const TensorflowRunnerFactory& tensorflow_runner_factory,
     const CheckinResult& checkin_result,
     const std::string& checkpoint_output_filename,
-    std::optional<absl::string_view> source_id_seed) {
+    absl::string_view source_id_seed) {
   const ClientPhase& client_phase = checkin_result.plan.phase();
   if (!client_phase.has_example_query_spec()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
@@ -384,16 +384,13 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
   engine::ExampleQueryPlanEngine plan_engine(
       example_iterator_factories, opstats_logger,
       example_iterator_query_recorder, tensorflow_runner_factory);
-  std::optional<std::string> source_id =
-      source_id_seed.has_value()
-          ? std::make_optional(ComputeSHA256(
-                absl::StrCat(*source_id_seed, checkin_result.task_name)))
-          : std::nullopt;
+  std::string source_id =
+      ComputeSHA256(absl::StrCat(source_id_seed, checkin_result.task_name));
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_phase.example_query_spec(), checkpoint_output_filename,
       use_client_report_wire_format, flags->enable_event_time_data_upload(),
       source_id, checkin_result.confidential_agg_info.has_value(),
-      flags->enable_privacy_id_generation(), flags->enable_private_logger(),
+      flags->enable_private_logger(),
       flags->drop_out_based_data_availability());
   PlanResultAndCheckpointFile result(std::move(plan_result));
   result.checkpoint_filename = checkpoint_output_filename;
@@ -1519,8 +1516,7 @@ RunPlanResults RunComputation(
     const TensorflowRunnerFactory& tensorflow_runner_factory,
     FLRunnerResult& fl_runner_result, const std::function<bool()>& should_abort,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time reference_time,
-    std::optional<absl::string_view> source_id_seed) {
+    const absl::Time reference_time, absl::string_view source_id_seed) {
   RetryWindow report_retry_window;
   phase_logger.LogComputationStarted(checkin_result.task_name);
   absl::Time run_plan_start_time = absl::Now();
@@ -1645,8 +1641,7 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     TensorflowRunnerFactory tensorflow_runner_factory,
     FLRunnerResult& fl_runner_result, const std::function<bool()>& should_abort,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time reference_time,
-    std::optional<absl::string_view> source_id_seed) {
+    const absl::Time reference_time, absl::string_view source_id_seed) {
   std::vector<std::string> successful_task_names;
   // We will try to run and report each task's results, even if one of those
   // steps fails for one of the tasks
@@ -1899,11 +1894,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return fl_runner_result;
   }
 
-  std::optional<std::string> source_id_seed = std::nullopt;
-  if (flags->enable_privacy_id_generation()) {
-    ABSL_ASSIGN_OR_RETURN(source_id_seed,
-                          GetOrCreateSourceIdSeed(opstats_logger));
-  }
+  ABSL_ASSIGN_OR_RETURN(std::string source_id_seed,
+                        GetOrCreateSourceIdSeed(opstats_logger));
 
   std::optional<std::string> attestation_measurement = std::nullopt;
   ABSL_ASSIGN_OR_RETURN(attestation_measurement,

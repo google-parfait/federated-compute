@@ -197,16 +197,6 @@ class Flags {
   // compute uploads.
   virtual bool enable_blob_header_in_http_headers() const { return false; }
 
-  // If true, enables the generation of a privacy ID for each record in a
-  // computation's results. This ID is generated using the record's timestamp.
-  // Records with timestamps falling into the same time window will share the
-  // same privacy ID. The records are then grouped by this privacy ID, and each
-  // group is uploaded separately. This ID allows the application of stronger
-  // user-level DP guarantees across uploads from the same device. This is only
-  // used for confidential aggregation tasks, and the privacy ID will only be
-  // stored in the encrypted payload.
-
-  virtual bool enable_privacy_id_generation() const { return false; }
 
   // If true, enables support for PrivateLogger in the federated compute client.
   virtual bool enable_private_logger() const { return false; }

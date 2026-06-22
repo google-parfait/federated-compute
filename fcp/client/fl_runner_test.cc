@@ -297,6 +297,13 @@ FlRunnerTestBase::FlRunnerTestBase() {
       .WillRepeatedly(
           [this]() { return training_conditions_satisfied_.load(); });
 
+  EXPECT_CALL(mock_opstats_logger_, GetOpStatsDb())
+      .WillRepeatedly(Return(&mock_opstats_db_));
+  fcp::client::opstats::OpStatsSequence opstats_sequence;
+  opstats_sequence.mutable_source_id_seed()->set_salt("test_salt");
+  EXPECT_CALL(mock_opstats_db_, Read())
+      .WillRepeatedly(Return(opstats_sequence));
+
   mock_federated_select_iterator_factory_ =
       new NiceMock<MockFederatedSelectExampleIteratorFactory>();
   ON_CALL(mock_fedselect_manager_, CreateExampleIteratorFactoryForUriTemplate(
@@ -493,14 +500,7 @@ class FlRunnerEligibilityEvalTest : public FlRunnerTestBase {
 };
 
 FlRunnerEligibilityEvalTest::FlRunnerEligibilityEvalTest()
-    : FlRunnerTestBase() {
-  EXPECT_CALL(mock_opstats_logger_, GetOpStatsDb())
-      .WillRepeatedly(Return(&mock_opstats_db_));
-  // Mock an empty OpStats DB.
-  fcp::client::opstats::OpStatsSequence opstats_sequence;
-  EXPECT_CALL(mock_opstats_db_, Read())
-      .WillRepeatedly(Return(opstats_sequence));
-}
+    : FlRunnerTestBase() {}
 
 void FlRunnerEligibilityEvalTest::SetUp() {
   ::testing::Test::SetUp();
@@ -1083,10 +1083,6 @@ class FlRunnerSourceIdSeedTest : public FlRunnerTestBase {
                 SetModelIdentifier(/*model_identifier=*/""));
     EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
     EXPECT_CALL(mock_phase_logger_, LogCheckinTurnedAway(_, _, _));
-
-    // Enable the flag to generate a source ID seed.
-    EXPECT_CALL(mock_flags_, enable_privacy_id_generation())
-        .WillRepeatedly(Return(true));
   }
 };
 

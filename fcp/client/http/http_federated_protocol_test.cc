@@ -2811,145 +2811,12 @@ TEST_F(HttpFederatedProtocolTest,
                                  HasSubstr("attestation verification failed")));
 }
 
-TEST_F(HttpFederatedProtocolTest,
-       TestReportCompletedViaConfidentialAggWithFCCheckpointsFlagDisabled) {
-  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
-      .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_flags_, enable_privacy_id_generation)
-      .WillRepeatedly(Return(false));
-  EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format)
-      .WillRepeatedly(Return(true));
-
-  // Issue an eligibility eval checkin first.
-  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*enable_confidential_aggregation*/ true));
-  std::string serialized_access_policy = "the access policy";
-  ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      /*report_eligibility_eval_result*/ true,
-      /*confidential_data_access_policy=*/serialized_access_policy));
-
-  ComputationResults results = CreateFCCheckpointsResults();
-  absl::Duration plan_duration = absl::Minutes(5);
-
-  // With enable_privacy_id_generation=false, we should only upload the first
-  // checkpoint. The first checkpoint created by CreateFCCheckpointsResults()
-  // has payload "ckpt1" and metadata with start_event_time.year=2025.
-  std::string expected_checkpoint_str = "ckpt1";
-  confidentialcompute::PayloadMetadata expected_payload_metadata;
-  expected_payload_metadata.mutable_event_time_range()
-      ->mutable_start_event_time()
-      ->set_year(2025);
-
-  // Generate a new public key, which we'll pass to the client in the
-  // ConfidentialEncryptionConfig.
-  auto [encoded_public_key, private_key] =
-      fcp::confidential_compute::GenerateHpkeKeyPair("key-id");
-
-  // Note: we don't specify any attestation evidence nor attestation
-  // endorsements in the encryption config, since we can't generate valid
-  // attestations in a test anyway.
-  ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
-  // Empty SignedEndorsements since the task does not use endorsements.
-  confidentialcompute::SignedEndorsements signed_endorsements;
-
-  // Ensure that the server's attestation evidence is considered valid.
-  EXPECT_CALL(
-      *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
-      .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-              const ConfidentialEncryptionConfig& encryption_config) {
-            return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
-          });
-
-  ExpectSuccessfulReportTaskResultRequest(
-      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, kTaskName, plan_duration);
-  ExpectSuccessfulStartAggregationDataUploadRequest(
-      "https://aggregation.uri/v1/confidentialaggregations/"
-      "AGGREGATION_SESSION_ID/"
-      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
-      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri,
-      false, encryption_config);
-
-  // Capture the raw uploaded data so we can subsequently validate that it was
-  // properly encrypted with the public key that was provided to the client.
-  std::string uploaded_data;
-  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
-                                     "https://bytestream.uri/upload/v1/media/"
-                                     "CHECKPOINT_RESOURCE?upload_protocol=raw",
-                                     HttpRequest::Method::kPost, _, _)))
-      .WillOnce([&uploaded_data](MockHttpClient::SimpleHttpRequest request) {
-        uploaded_data = request.body;
-        return CreateEmptySuccessHttpResponse();
-      });
-
-  ExpectSuccessfulSubmitAggregationResultRequest(
-      "https://aggregation.second.uri/v1/confidentialaggregations/"
-      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
-      /*confidential_aggregation=*/true);
-
-  EXPECT_THAT(federated_protocol_->ReportCompleted(std::move(results),
-                                                   plan_duration, std::nullopt),
-              IsOkReportResult());
-
-  // Validate that the payload can be parsed and that the ciphertext can be
-  // decrypted using the decryptor that generated the public encryption key.
-  absl::StatusOr<confidential_compute::ClientPayloadHeader> payload_header;
-  absl::string_view ciphertext;
-  {
-    absl::string_view uploaded_data_view(uploaded_data);
-    payload_header =
-        fcp::confidential_compute::DecodeAndConsumeClientPayloadHeader(
-            uploaded_data_view);
-    ABSL_ASSERT_OK(payload_header);
-    // The uploaded_data_view now contains just the ciphertext.
-    ciphertext = uploaded_data_view;
-  }
-
-  // Validate the payload header values.
-  EXPECT_TRUE(payload_header->is_gzip_compressed);
-  ::fcp::confidentialcompute::BlobHeader blob_header;
-  ASSERT_TRUE(
-      blob_header.ParseFromString(payload_header->serialized_blob_header));
-  EXPECT_EQ(blob_header.access_policy_sha256(),
-            ComputeSHA256(serialized_access_policy));
-  EXPECT_EQ(blob_header.access_policy_node_id(), 0);
-  EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
-  EXPECT_EQ(blob_header.key_id(), "key-id");
-  EXPECT_THAT(blob_header.payload_metadata(),
-              EqualsProto(expected_payload_metadata));
-
-  // Ensure that the ciphertext can be decrypted.
-  fcp::confidential_compute::MessageDecryptor decryptor(
-      std::vector<absl::string_view>{private_key});
-  auto decrypted_uploaded_data =
-      decryptor.Decrypt(ciphertext, payload_header->serialized_blob_header,
-                        payload_header->encrypted_symmetric_key,
-                        payload_header->serialized_blob_header,
-                        payload_header->encapsulated_public_key, "key-id");
-  ABSL_ASSERT_OK(decrypted_uploaded_data);
-
-  // The ciphertext contains compressed data, so we must decompress it before
-  // comparing it with the expected checkpoint.
-  auto decompressed_uploaded_data =
-      UncompressWithGzip(*decrypted_uploaded_data);
-  ABSL_ASSERT_OK(decompressed_uploaded_data);
-  EXPECT_EQ(*decompressed_uploaded_data, expected_checkpoint_str);
-}
 
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaConfidentialAggWithFCCheckpointsSuccess) {
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_flags_, enable_privacy_id_generation)
-      .WillRepeatedly(Return(true));
+
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format)
       .WillRepeatedly(Return(true));
 
@@ -3073,8 +2940,7 @@ TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaConfidentialAggWithFCCheckpointsPartialSuccess) {
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_flags_, enable_privacy_id_generation)
-      .WillRepeatedly(Return(true));
+
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format)
       .WillRepeatedly(Return(true));
 
@@ -3170,8 +3036,7 @@ TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaConfidentialAggWithFCCheckpointsFailure) {
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_flags_, enable_privacy_id_generation)
-      .WillRepeatedly(Return(true));
+
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format)
       .WillRepeatedly(Return(true));
 

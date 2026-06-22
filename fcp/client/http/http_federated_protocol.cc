@@ -1352,34 +1352,6 @@ ReportResult HttpFederatedProtocol::ReportViaOneShotAggregation(
     checkpoint_metadata.push_back(std::nullopt);
   }
 
-  if (!flags_->enable_privacy_id_generation()) {
-    // Legacy single-upload path.
-    absl::StatusOr<PerUploadInfo> per_upload_info =
-        HandleStartDataAggregationUploadOperationResponse(
-            PerformStartDataUploadRequestAndReportTaskResult(plan_duration,
-                                                             task_info),
-            task_info);
-    if (!per_upload_info.ok()) {
-      task_info.state = ObjectState::kReportFailedPermanentError;
-      return ReportResult::FromStatus(per_upload_info.status());
-    }
-    // If we are doing a confidential aggregation or Willow aggregation, we must
-    // have received an encryption config from the confidential aggregation
-    // service, and if we're doing simple aggregation we must not have received
-    // an encryption config.
-    FCP_CHECK(per_upload_info->confidential_encryption_config.has_value() ==
-              use_confidential_aggregation_service)
-        << aggregation_type_readable;
-    absl::Status upload_status =
-        UploadResult(task_info, *per_upload_info, result_data[0],
-                     checkpoint_metadata[0], aggregation_type_readable);
-    if (!upload_status.ok()) {
-      task_info.state = ObjectState::kReportFailedPermanentError;
-      return ReportResult::FromStatus(upload_status);
-    }
-    return ReportResult::FromStatus(absl::OkStatus());
-  }
-  // New multiple-uploads path.
   absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>> responses =
       PerformStartDataUploadRequestAndReportTaskResultForMultipleUploads(
           plan_duration, task_info, result_data.size());
@@ -1496,82 +1468,6 @@ absl::Status HttpFederatedProtocol::UploadResult(
     return upload_status;
   }
   return SubmitAggregationResult(task_info, per_upload_info);
-}
-
-absl::StatusOr<InMemoryHttpResponse>
-HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
-    absl::Duration plan_duration, PerTaskInfo& task_info) {
-  bool use_confidential_aggregation_service =
-      task_info.aggregation_type == AggregationType::kConfidentialAggregation ||
-      task_info.aggregation_type == AggregationType::kWillowAggregation;
-  ABSL_ASSIGN_OR_RETURN(
-      ReportTaskResultRequest report_task_result_request,
-      CreateReportTaskResultRequest(
-          engine::PhaseOutcome::COMPLETED, plan_duration,
-          task_info.aggregation_session_id, task_info.task_name));
-  ABSL_ASSIGN_OR_RETURN(
-      std::string report_task_result_uri_suffix,
-      CreateReportTaskResultUriSuffix(population_name_, task_info.session_id));
-  ABSL_ASSIGN_OR_RETURN(
-      std::unique_ptr<HttpRequest> http_report_task_result_request,
-      task_assignment_request_creator_->CreateProtocolRequest(
-          report_task_result_uri_suffix, {}, HttpRequest::Method::kPost,
-          report_task_result_request.SerializeAsString(),
-          /*is_protobuf_encoded=*/true));
-
-  // Note that the plain Aggregations protocol and ConfidentialAggregations
-  // protocol currently share the same request message structure, and hence we
-  // can use the same code to handle both protocols here. This may not remain
-  // the case in the future, at which point we will need to split these code
-  // paths up.
-  std::string start_upload_request;
-  std::string start_aggregation_data_upload_uri_suffix;
-  if (use_confidential_aggregation_service) {
-    start_upload_request =
-        StartConfidentialAggregationDataUploadRequest().SerializeAsString();
-    ABSL_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
-                          CreateStartConfidentialAggregationDataUploadUriSuffix(
-                              task_info.aggregation_session_id,
-                              task_info.aggregation_authorization_token));
-  } else {
-    start_upload_request =
-        StartAggregationDataUploadRequest().SerializeAsString();
-    ABSL_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
-                          CreateStartAggregationDataUploadUriSuffix(
-                              task_info.aggregation_session_id,
-                              task_info.aggregation_authorization_token));
-  }
-  ABSL_ASSIGN_OR_RETURN(
-      std::unique_ptr<HttpRequest> http_start_aggregation_data_upload_request,
-      task_info.aggregation_request_creator->CreateProtocolRequest(
-          start_aggregation_data_upload_uri_suffix, {},
-          HttpRequest::Method::kPost, start_upload_request,
-          /*is_protobuf_encoded=*/true));
-  FCP_LOG(INFO) << (use_confidential_aggregation_service
-                        ? "StartConfidentialAggregationDataUpload"
-                        : "StartAggregationDataUpload")
-                << " request uri is : "
-                << http_start_aggregation_data_upload_request->uri();
-  FCP_LOG(INFO) << "ReportTaskResult request uri is: "
-                << http_report_task_result_request->uri();
-  std::vector<std::unique_ptr<HttpRequest>> requests;
-  requests.push_back(std::move(http_start_aggregation_data_upload_request));
-  requests.push_back(std::move(http_report_task_result_request));
-  ABSL_ASSIGN_OR_RETURN(
-      std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
-      protocol_request_helper_.PerformMultipleProtocolRequests(
-          std::move(requests), *interruptible_runner_));
-  // We should have two responses, otherwise we have made a developer error.
-  FCP_CHECK(responses.size() == 2);
-  // The responses are returned in order so the first response will be the one
-  // for StartAggregationDataUpload request.  We only care about this
-  // response, the ReportTaskResult request is just a best effort to report
-  // client metrics to the server, and we don't want to abort the aggregation
-  // even if it failed.
-  if (!responses[1].ok()) {
-    log_manager_->LogDiag(ProdDiagCode::HTTP_REPORT_TASK_RESULT_REQUEST_FAILED);
-  }
-  return responses[0];
 }
 
 absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
