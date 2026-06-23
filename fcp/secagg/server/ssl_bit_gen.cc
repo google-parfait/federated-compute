@@ -27,7 +27,7 @@ namespace fcp {
 namespace secagg {
 
 SslBitGen::result_type SslBitGen::operator()() {
-  static_assert(std::is_same<uint8_t, unsigned char>::value,
+  static_assert(std::is_same_v<uint8_t, unsigned char>,
                 "uint8_t being other than unsigned char isn't supported by "
                 "BoringSSL");
   SslBitGen::result_type random_integer;
