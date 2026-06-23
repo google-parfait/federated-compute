@@ -73,7 +73,7 @@ flatbuffers::DetachedBuffer BuildFlatBuffer(Arg&&... args) {
 class TracingSpanBase {
  public:
   // Returns a reference to this span.
-  inline TracingSpanRef Ref() const { return impl_->Ref(); }
+  TracingSpanRef Ref() const { return impl_->Ref(); }
   virtual ~TracingSpanBase() = default;
 
  protected:

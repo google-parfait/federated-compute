@@ -42,8 +42,7 @@ union TracingTag {
   }
   TracingTag() = delete;
 
-  static inline const TracingTag* FromFlatbuf(
-      const flatbuffers::DetachedBuffer& buf) {
+  static const TracingTag* FromFlatbuf(const flatbuffers::DetachedBuffer& buf) {
     return reinterpret_cast<const TracingTag*>(&buf.data()[4]);
   }
 };
