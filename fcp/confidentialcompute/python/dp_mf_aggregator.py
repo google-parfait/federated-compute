@@ -101,7 +101,6 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
               client_updates,
               clip_norm=self._l2_clip_norm,
               rescale_to_unit_norm=False,
-              nan_safe=True,
           )
           was_clipped = jnp.int32(global_l2_norm > self._l2_clip_norm)
           new_metrics = {'num_clipped_updates': was_clipped}
