@@ -184,9 +184,6 @@ class Flags {
   // If true, confidential aggregation is advertised & can be used for uploads.
   virtual bool enable_confidential_aggregation() const { return false; }
 
-  // If true, adds support for relative URI prefixes.
-  virtual bool enable_relative_uri_prefix() const { return false; }
-
   // If true, the minimum separation policy index will be logged to PhaseStats.
   virtual bool log_min_sep_index_to_phase_stats() const { return false; }
 

@@ -566,13 +566,11 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
   }
 
   pre_task_assignment_session_id_ = response_proto.session_id();
-  if (flags_->enable_relative_uri_prefix()) {
-    ABSL_RETURN_IF_ERROR(
-        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
-            most_recent_forwarding_prefix_,
-            response_proto.mutable_task_assignment_forwarding_info(),
-            /*should_update_most_recent_forwarding_prefix=*/true));
-  }
+  ABSL_RETURN_IF_ERROR(
+      GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+          most_recent_forwarding_prefix_,
+          response_proto.mutable_task_assignment_forwarding_info(),
+          /*should_update_most_recent_forwarding_prefix=*/true));
 
   ABSL_ASSIGN_OR_RETURN(
       task_assignment_request_creator_,
@@ -970,7 +968,6 @@ HttpFederatedProtocol::CreatePerTaskInfoFromTaskAssignment(
         task_assignment,
     ObjectState state) {
   PerTaskInfo task_info;
-  if (flags_->enable_relative_uri_prefix()) {
     ForwardingInfo aggregation_data_forwarding_info =
         task_assignment.aggregation_data_forwarding_info();
     ABSL_RETURN_IF_ERROR(
@@ -983,13 +980,6 @@ HttpFederatedProtocol::CreatePerTaskInfoFromTaskAssignment(
         ProtocolRequestCreator::Create(
             api_key_, aggregation_data_forwarding_info,
             !flags_->disable_http_request_body_compression()));
-  } else {
-    ABSL_ASSIGN_OR_RETURN(
-        task_info.aggregation_request_creator,
-        ProtocolRequestCreator::Create(
-            api_key_, task_assignment.aggregation_data_forwarding_info(),
-            !flags_->disable_http_request_body_compression()));
-  }
   task_info.state = state;
   task_info.session_id = task_assignment.session_id();
   task_info.aggregation_session_id = task_assignment.aggregation_id();
@@ -1628,19 +1618,17 @@ HttpFederatedProtocol::CreatePerUploadInfo(
           "proto");
     }
 
-    if (flags_->enable_relative_uri_prefix()) {
-      ABSL_RETURN_IF_ERROR(
-          GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
-              most_recent_forwarding_prefix_,
-              response_proto.mutable_aggregation_protocol_forwarding_info(),
-              /*should_update_most_recent_forwarding_prefix=*/false));
-      ABSL_RETURN_IF_ERROR(
-          GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
-              most_recent_forwarding_prefix_,
-              response_proto.mutable_resource()
-                  ->mutable_data_upload_forwarding_info(),
-              /*should_update_most_recent_forwarding_prefix=*/false));
-    }
+    ABSL_RETURN_IF_ERROR(
+        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+            most_recent_forwarding_prefix_,
+            response_proto.mutable_aggregation_protocol_forwarding_info(),
+            /*should_update_most_recent_forwarding_prefix=*/false));
+    ABSL_RETURN_IF_ERROR(
+        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+            most_recent_forwarding_prefix_,
+            response_proto.mutable_resource()
+                ->mutable_data_upload_forwarding_info(),
+            /*should_update_most_recent_forwarding_prefix=*/false));
     aggregation_protocol_forwarding_info =
         response_proto.aggregation_protocol_forwarding_info();
     data_upload_forwarding_info =
@@ -1663,19 +1651,17 @@ HttpFederatedProtocol::CreatePerUploadInfo(
           "could not parse StartAggregationDataUploadResponse proto");
     }
 
-    if (flags_->enable_relative_uri_prefix()) {
-      ABSL_RETURN_IF_ERROR(
-          GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
-              most_recent_forwarding_prefix_,
-              response_proto.mutable_aggregation_protocol_forwarding_info(),
-              /*should_update_most_recent_forwarding_prefix=*/false));
-      ABSL_RETURN_IF_ERROR(
-          GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
-              most_recent_forwarding_prefix_,
-              response_proto.mutable_resource()
-                  ->mutable_data_upload_forwarding_info(),
-              /*should_update_most_recent_forwarding_prefix=*/false));
-    }
+    ABSL_RETURN_IF_ERROR(
+        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+            most_recent_forwarding_prefix_,
+            response_proto.mutable_aggregation_protocol_forwarding_info(),
+            /*should_update_most_recent_forwarding_prefix=*/false));
+    ABSL_RETURN_IF_ERROR(
+        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+            most_recent_forwarding_prefix_,
+            response_proto.mutable_resource()
+                ->mutable_data_upload_forwarding_info(),
+            /*should_update_most_recent_forwarding_prefix=*/false));
     aggregation_protocol_forwarding_info =
         response_proto.aggregation_protocol_forwarding_info();
     data_upload_forwarding_info =
@@ -1985,25 +1971,23 @@ absl::Status HttpFederatedProtocol::ReportViaMultiShotSecureAggregation(
   }
   absl::StatusOr<secagg::ServerToClientWrapperMessage> server_response_holder;
 
-  if (flags_->enable_relative_uri_prefix()) {
-    ABSL_RETURN_IF_ERROR(
-        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
-            most_recent_forwarding_prefix_,
-            response_proto.mutable_secagg_protocol_forwarding_info(),
-            /*should_update_most_recent_forwarding_prefix=*/false));
-    ABSL_RETURN_IF_ERROR(
-        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
-            most_recent_forwarding_prefix_,
-            response_proto.mutable_masked_result_resource()
-                ->mutable_data_upload_forwarding_info(),
-            /*should_update_most_recent_forwarding_prefix=*/false));
-    ABSL_RETURN_IF_ERROR(
-        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
-            most_recent_forwarding_prefix_,
-            response_proto.mutable_nonmasked_result_resource()
-                ->mutable_data_upload_forwarding_info(),
-            /*should_update_most_recent_forwarding_prefix=*/false));
-  }
+  ABSL_RETURN_IF_ERROR(
+      GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+          most_recent_forwarding_prefix_,
+          response_proto.mutable_secagg_protocol_forwarding_info(),
+          /*should_update_most_recent_forwarding_prefix=*/false));
+  ABSL_RETURN_IF_ERROR(
+      GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+          most_recent_forwarding_prefix_,
+          response_proto.mutable_masked_result_resource()
+              ->mutable_data_upload_forwarding_info(),
+          /*should_update_most_recent_forwarding_prefix=*/false));
+  ABSL_RETURN_IF_ERROR(
+      GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+          most_recent_forwarding_prefix_,
+          response_proto.mutable_nonmasked_result_resource()
+              ->mutable_data_upload_forwarding_info(),
+          /*should_update_most_recent_forwarding_prefix=*/false));
 
   ABSL_ASSIGN_OR_RETURN(
       std::unique_ptr<SecAggSendToServerBase> send_to_server_impl,

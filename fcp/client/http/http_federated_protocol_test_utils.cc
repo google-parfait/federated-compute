@@ -413,8 +413,7 @@ void HttpFederatedProtocolTest::SetUp(
       .WillRepeatedly(Return(kCancellationWaitingPeriodSec));
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(false));
-  EXPECT_CALL(mock_flags_, enable_relative_uri_prefix)
-      .WillRepeatedly(Return(true));
+
   // Disable http retries to simplify transient error tests that return
   // retriable http errors.
   EXPECT_CALL(mock_flags_, http_retry_max_attempts).WillRepeatedly(Return(0));
