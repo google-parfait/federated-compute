@@ -75,11 +75,11 @@ message ExampleQueryResult {
   VectorData vector_data = 1;
 
   message ExampleQueryStats {
-    // The total number of "logical" output rows produced by the query, which
-    // cannot otherwise be deduced from the produced vector data itself. This
-    // can be used both for logging purposes and to compare against a minimum
-    // number of outputs rows that must be produced by the query in order for
-    // the device to be eligible.
+    // The number of output rows produced by the query. Must be set, even if the
+    // value could be deduced from the vector data. This can be used both for
+    // logging purposes and to compare against a minimum number of outputs rows
+    // that must be produced by the query in order for the device to be
+    // eligible.
     int32 output_rows_count = 1;
 
     // Deprecated. Maps the query name to the event time range of the query
