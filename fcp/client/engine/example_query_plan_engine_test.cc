@@ -73,6 +73,7 @@ namespace {
 using ::fcp::client::ExampleQueryResult;
 using ::fcp::confidential_compute::kEventTimeColumnName;
 using ::fcp::confidential_compute::kPrivacyIdColumnName;
+using ::fcp::confidential_compute::kPrivateLoggerEntryKey;
 using ::fcp::confidentialcompute::WindowingSchedule;
 using ::google::internal::federated::plan::AggregationConfig;
 using ::google::internal::federated::plan::ClientOnlyPlan;
@@ -236,9 +237,8 @@ ReadFCCheckpointTensors(absl::string_view checkpoint) {
 ExampleQuerySpec::ExampleQuery CreateDirectDataUploadExampleQuery(
     absl::string_view tensor_name, absl::string_view collection_uri) {
   ExampleQuerySpec::ExampleQuery query;
-  query.set_direct_output_tensor_name(std::string(tensor_name));
-  query.mutable_example_selector()->set_collection_uri(
-      std::string(collection_uri));
+  query.set_direct_output_tensor_name(tensor_name);
+  query.mutable_example_selector()->set_collection_uri(collection_uri);
   return query;
 }
 
@@ -607,19 +607,19 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerVectorNamesAreRewritten) {
   ExampleQueryResult::VectorData::Values entry_values;
   entry_values.mutable_string_values()->add_value("value1");
   entry_values.mutable_string_values()->add_value("value2");
-  (*example_query_result_.mutable_vector_data()->mutable_vectors())["entry"] =
-      entry_values;
+  (*example_query_result_.mutable_vector_data()
+        ->mutable_vectors())[kPrivateLoggerEntryKey] = entry_values;
   ExampleQueryResult::VectorData::Values time_values;
   time_values.mutable_string_values()->add_value("2025-10-02T17:30:00Z");
   time_values.mutable_string_values()->add_value("2025-10-02T17:31:00Z");
   (*example_query_result_.mutable_vector_data()
-        ->mutable_vectors())["_fcp_event_time"] = time_values;
+        ->mutable_vectors())[kEventTimeColumnName] = time_values;
 
   // Update client_only_plan_ to use prefixed vector names in
   // output_vector_specs. The example_query_result_ will use non-prefixed
-  // names ("entry", "_fcp_event_time"), and we expect RunPlan to match them
-  // via suffix and rewrite them to "my_upload_query_name/entry",
-  // "my_upload_query_name/_fcp_event_time".
+  // names ("entry" and kEventTimeColumnName), and we expect RunPlan to match
+  // them via suffix and rewrite them to "my_upload_query_name/entry",
+  // "my_upload_query_name/" + kEventTimeColumnName.
   client_only_plan_.mutable_phase()
       ->mutable_example_query_spec()
       ->clear_example_queries();
@@ -627,7 +627,8 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerVectorNamesAreRewritten) {
   entry_vector_spec.set_vector_name("my_upload_query_name/entry");
   entry_vector_spec.set_data_type(DataType::STRING);
   ExampleQuerySpec::OutputVectorSpec time_vector_spec;
-  time_vector_spec.set_vector_name("my_upload_query_name/_fcp_event_time");
+  time_vector_spec.set_vector_name(
+      absl::StrCat("my_upload_query_name/", kEventTimeColumnName));
   time_vector_spec.set_data_type(DataType::STRING);
 
   ExampleQuerySpec::ExampleQuery example_query;
