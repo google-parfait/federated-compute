@@ -59,7 +59,7 @@ class ExampleIteratorQueryRecorderImpl : public ExampleIteratorQueryRecorder {
  public:
   explicit ExampleIteratorQueryRecorderImpl(
       const SelectorContext& selector_context)
-      : selector_context_(selector_context){};
+      : selector_context_(selector_context) {}
   // Create a SingleExampleIteratorQueryRecorder which records a single query.
   // This class keeps the ownership of the created
   // SingleExampleIteratorQueryRecorder.
@@ -89,7 +89,7 @@ class SingleExampleIteratorQueryRecorderImpl
  public:
   explicit SingleExampleIteratorQueryRecorderImpl(
       const google::internal::federated::plan::ExampleSelector& selector)
-      : selector_(selector){};
+      : selector_(selector) {}
   // Increment the example count.
   void Increment() override ABSL_LOCKS_EXCLUDED(mutex_);
   // Finish recording, and pack the results into a SingleExampleIteratorQuery
