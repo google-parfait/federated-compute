@@ -10,10 +10,9 @@ option java_outer_classname = "ConstructUserSessionProto";
 
 // Configures the ConstructUserSession container upon initialization.
 message ConstructUserSessionInitConfig {
-  // `session_window_start` and `session_window_end` define the time window of
-  // the user session.
-  google.protobuf.Timestamp session_window_start = 1;
-  google.protobuf.Timestamp session_window_end = 2;
+  // The time-window related metadata for the constructed user session.
+  SessionTimeWindowMetadata time_window_metadata = 1;
+
   // The query prefix used to dynamically locate system tensors like
   // confidential_compute_event_time.
   string on_device_query_name = 3;
