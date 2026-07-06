@@ -32,6 +32,7 @@
 #include "google/type/datetime.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
@@ -5020,6 +5021,202 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_));
+}
+
+// This test verifies that if a task uses a tf_custom_policy, and the
+// TensorflowRunner factory is not registered (which is the case in TF-stripped
+// builds, or we simulate it here by clearing the registry), the run handles it
+// gracefully:
+// - In builds with TF linked: the policy is evaluated, but run_plan_func fails
+//   due to the missing factory (since we cleared the registry), logging a
+//   non-fatal error.
+// - In builds with TF stripped: the policy is pre-filtered as unimplemented
+//   (since the custom policy implementation is replaced with a stub), so the
+//   task is marked ineligible without logging an error.
+// In both cases, the task is marked ineligible (weight 0), and the run
+// proceeds to Checkin and fails gracefully (due to no eligible tasks) rather
+// than crashing.
+TEST_F(FlRunnerEligibilityEvalTest,
+       EvalCheckinWithTfCustomPolicyHandlesMissingTfRunnerFactoryGracefully) {
+  // Clear the registry to simulate OSS (no TF runner registered).
+  auto old_factory = GetGlobalTensorflowRunnerFactoryRegistry().Get(
+      TensorflowRunnerImplementation::kTensorflowRunnerImpl);
+  GetGlobalTensorflowRunnerFactoryRegistry().ClearForTesting();
+  absl::Cleanup restore_registry = [old_factory =
+                                        std::move(old_factory)]() mutable {
+    GetGlobalTensorflowRunnerFactoryRegistry().ClearForTesting();
+    GetGlobalTensorflowRunnerFactoryRegistry().Register(
+        TensorflowRunnerImplementation::kTensorflowRunnerImpl,
+        std::move(old_factory));
+  };
+
+  // Population spec with only a tf_custom_policy.
+  ClientOnlyPlan plan;
+  plan.mutable_phase()
+      ->mutable_tensorflow_spec()
+      ->set_dataset_token_tensor_name("dataset_token");
+  plan.mutable_phase()
+      ->mutable_federated_compute_eligibility()
+      ->set_task_eligibility_info_tensor_name("task_eligibility_info");
+  ComputationArtifacts test_artifacts;
+  test_artifacts.plan = std::move(plan);
+  test_artifacts.checkpoint = kInitialCheckpoint;
+
+  PopulationEligibilitySpec spec;
+  auto* task_info = spec.add_task_info();
+  task_info->set_task_name(kTaskName);
+  task_info->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_info->add_eligibility_policy_indices(0);
+  auto* policy = spec.add_eligibility_policies();
+  policy->set_name("tf_custom_policy");
+  policy->mutable_tf_custom_policy()->set_arguments("some_arg");
+  test_artifacts.population_eligibility_spec = spec;
+
+  EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
+      .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
+          {test_artifacts.plan.SerializeAsCord(), test_artifacts.checkpoint},
+          kEligibilityEvalExecutionId,
+          test_artifacts.population_eligibility_spec}));
+
+  // The eligibility decider marks the task ineligible (weight 0).
+  // Checkin is called with a non-null TaskEligibilityInfo (all weights 0), and
+  // the server rejects since no tasks are eligible.
+  TaskEligibilityInfo expected_eligibility_info;
+  expected_eligibility_info.set_version(1);
+  TaskWeight* task_weight = expected_eligibility_info.add_task_weights();
+  task_weight->set_task_name(kTaskName);
+  task_weight->set_weight(0.0f);
+  EXPECT_CALL(mock_federated_protocol_,
+              MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
+      .WillOnce(Return(FederatedProtocol::Rejection{}));
+
+  {
+    InSequence seq;
+    EXPECT_CALL(mock_phase_logger_, LogEligibilityEvalCheckinStarted());
+    EXPECT_CALL(mock_phase_logger_,
+                SetModelIdentifier(kEligibilityEvalExecutionId));
+    EXPECT_CALL(mock_phase_logger_,
+                LogEligibilityEvalCheckinPlanUriReceived(_, _));
+    ExpectEligibilityCheckinCompletedLogEvent();
+    EXPECT_CALL(mock_phase_logger_, LogEligibilityEvalComputationStarted());
+    EXPECT_CALL(mock_phase_logger_,
+                LogEligibilityEvalComputationCompleted(_, _, _));
+    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
+    EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
+    EXPECT_CALL(mock_phase_logger_, LogCheckinTurnedAway(_, _, _));
+  }
+
+  absl::StatusOr<FLRunnerResult> result = RunFederatedComputation(
+      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
+      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
+      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
+      absl::Now(), kSessionName, kPopulationName, clock_);
+  // The run should complete without crashing, with a FAIL result.
+  ABSL_ASSERT_OK(result);
+  FLRunnerResult expected_result;
+  *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
+      mock_federated_protocol_.GetLatestRetryWindow());
+  expected_result.set_contribution_result(FLRunnerResult::FAIL);
+  EXPECT_THAT(*result, EqualsProto(expected_result));
+}
+
+// This test verifies that if a task uses a tf_custom_policy, and the
+// TensorflowRunner factory is registered but returns null, the run handles it
+// gracefully:
+// - In builds with TF linked: the policy is evaluated, but the factory returns
+//   null, so run_plan_func fails, logging a non-fatal error.
+// - In builds with TF stripped: the policy is pre-filtered as unimplemented,
+//   so the task is marked ineligible without logging an error.
+// In both cases, the task is marked ineligible (weight 0), and the run
+// proceeds to Checkin and fails gracefully (due to no eligible tasks) rather
+// than crashing.
+TEST_F(FlRunnerEligibilityEvalTest,
+       EvalCheckinWithTfCustomPolicyHandlesNullTfRunnerGracefully) {
+  // Clear the registry and register a factory that returns null.
+  auto old_factory = GetGlobalTensorflowRunnerFactoryRegistry().Get(
+      TensorflowRunnerImplementation::kTensorflowRunnerImpl);
+  GetGlobalTensorflowRunnerFactoryRegistry().ClearForTesting();
+  GetGlobalTensorflowRunnerFactoryRegistry().Register(
+      TensorflowRunnerImplementation::kTensorflowRunnerImpl,
+      []() { return nullptr; });
+  absl::Cleanup restore_registry = [old_factory =
+                                        std::move(old_factory)]() mutable {
+    GetGlobalTensorflowRunnerFactoryRegistry().ClearForTesting();
+    GetGlobalTensorflowRunnerFactoryRegistry().Register(
+        TensorflowRunnerImplementation::kTensorflowRunnerImpl,
+        std::move(old_factory));
+  };
+
+  // Population spec with only a tf_custom_policy.
+  ClientOnlyPlan plan;
+  plan.mutable_phase()
+      ->mutable_tensorflow_spec()
+      ->set_dataset_token_tensor_name("dataset_token");
+  plan.mutable_phase()
+      ->mutable_federated_compute_eligibility()
+      ->set_task_eligibility_info_tensor_name("task_eligibility_info");
+  ComputationArtifacts test_artifacts;
+  test_artifacts.plan = std::move(plan);
+  test_artifacts.checkpoint = kInitialCheckpoint;
+
+  PopulationEligibilitySpec spec;
+  auto* task_info = spec.add_task_info();
+  task_info->set_task_name(kTaskName);
+  task_info->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_info->add_eligibility_policy_indices(0);
+  auto* policy = spec.add_eligibility_policies();
+  policy->set_name("tf_custom_policy");
+  policy->mutable_tf_custom_policy()->set_arguments("some_arg");
+  test_artifacts.population_eligibility_spec = spec;
+
+  EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
+      .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
+          {test_artifacts.plan.SerializeAsCord(), test_artifacts.checkpoint},
+          kEligibilityEvalExecutionId,
+          test_artifacts.population_eligibility_spec}));
+
+  // The eligibility decider marks the task ineligible (weight 0).
+  // Checkin is called with a non-null TaskEligibilityInfo (all weights 0), and
+  // the server rejects since no tasks are eligible.
+  TaskEligibilityInfo expected_eligibility_info;
+  expected_eligibility_info.set_version(1);
+  TaskWeight* task_weight = expected_eligibility_info.add_task_weights();
+  task_weight->set_task_name(kTaskName);
+  task_weight->set_weight(0.0f);
+  EXPECT_CALL(mock_federated_protocol_,
+              MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
+      .WillOnce(Return(FederatedProtocol::Rejection{}));
+
+  {
+    InSequence seq;
+    EXPECT_CALL(mock_phase_logger_, LogEligibilityEvalCheckinStarted());
+    EXPECT_CALL(mock_phase_logger_,
+                SetModelIdentifier(kEligibilityEvalExecutionId));
+    EXPECT_CALL(mock_phase_logger_,
+                LogEligibilityEvalCheckinPlanUriReceived(_, _));
+    ExpectEligibilityCheckinCompletedLogEvent();
+    EXPECT_CALL(mock_phase_logger_, LogEligibilityEvalComputationStarted());
+    EXPECT_CALL(mock_phase_logger_,
+                LogEligibilityEvalComputationCompleted(_, _, _));
+    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
+    EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
+    EXPECT_CALL(mock_phase_logger_, LogCheckinTurnedAway(_, _, _));
+  }
+
+  absl::StatusOr<FLRunnerResult> result = RunFederatedComputation(
+      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
+      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
+      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
+      absl::Now(), kSessionName, kPopulationName, clock_);
+  // The run should complete without crashing, with a FAIL result.
+  ABSL_ASSERT_OK(result);
+  FLRunnerResult expected_result;
+  *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
+      mock_federated_protocol_.GetLatestRetryWindow());
+  expected_result.set_contribution_result(FLRunnerResult::FAIL);
+  EXPECT_THAT(*result, EqualsProto(expected_result));
 }
 
 }  // namespace

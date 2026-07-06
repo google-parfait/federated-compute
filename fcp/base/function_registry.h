@@ -104,6 +104,12 @@ class FunctionRegistry {
     return fn;
   }
 
+  // Clears all registered functions. For testing use only.
+  void ClearForTesting() {
+    absl::MutexLock lock(mu_);
+    functions_.clear();
+  }
+
  private:
   mutable absl::Mutex mu_;
   absl::flat_hash_map<Key, Function> functions_ ABSL_GUARDED_BY(mu_);

@@ -233,6 +233,7 @@ cc_test(
         "//fcp/protos:population_eligibility_spec_cc_proto",
         "//fcp/protos/confidentialcompute:payload_metadata_cc_proto",
         "//fcp/testing",
+        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",

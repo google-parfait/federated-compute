@@ -651,6 +651,8 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     FCP_LOG(ERROR) << message;
     return absl::InternalError("");
   }
+  const std::string& checkpoint_input_filename_path =
+      *checkpoint_input_filename;
 
   phase_logger.LogEligibilityEvalCheckinCompleted(network_stats,
                                                   /*time_before_checkin=*/
@@ -668,43 +670,55 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
   // case we somehow get a legacy EET with no spec, we can skip evaluating this
   // and opt the client out of all tasks.
   if (eligibility_eval_task.population_eligibility_spec.has_value()) {
-    if (tensorflow_runner_factory) {
+    // Build a run_plan_func that is passed to EligibilityDecider for evaluating
+    // any TensorFlowSpec-based eligibility policies. In practice, modern
+    // populations rarely exercise this path as tensorflow-based eligibility
+    // policies are deprecated, so we defer runner creation until it is actually
+    // called.
+    //
+    // If the server somehow serves a custom TF EET but no TF runner is
+    // available (e.g. a TF-stripped build), we return a graceful plan error
+    // instead of crashing.
+    std::function<absl::StatusOr<TaskEligibilityInfo>(
+        std::vector<engine::ExampleIteratorFactory*>)>
+        run_plan_func = [&should_abort, &log_manager, &opstats_logger, &flags,
+                         &plan, &checkpoint_input_filename_path, &timing_config,
+                         &run_computation_start_time, &reference_time,
+                         &tensorflow_runner_factory](
+                            std::vector<engine::ExampleIteratorFactory*>
+                                override_iterator_factories)
+        -> absl::StatusOr<TaskEligibilityInfo> {
+      // Empty when no factory was registered; see construction site above.
+      if (!tensorflow_runner_factory) {
+        return absl::InternalError(
+            "A TensorFlow eligibility eval task was received, but no "
+            "TensorFlow runner factory is registered");
+      }
       std::unique_ptr<TensorflowRunner> tensorflow_runner =
           tensorflow_runner_factory();
-      std::function<absl::StatusOr<TaskEligibilityInfo>(
-          std::vector<engine::ExampleIteratorFactory*>)>
-          run_plan_func =
-              [&should_abort, &log_manager, &opstats_logger, &flags, &plan,
-               &checkpoint_input_filename, &timing_config,
-               &run_computation_start_time, &reference_time,
-               &tensorflow_runner](std::vector<engine::ExampleIteratorFactory*>
-                                       override_iterator_factories)
-          -> absl::StatusOr<TaskEligibilityInfo> {
-        FCP_CHECK(tensorflow_runner != nullptr);
-        engine::PlanResult result =
-            tensorflow_runner->RunEligibilityEvalPlanWithTensorflowSpec(
-                override_iterator_factories, should_abort, log_manager,
-                opstats_logger, flags, plan, *checkpoint_input_filename,
-                timing_config, run_computation_start_time, reference_time);
-        if (result.outcome != engine::PlanOutcome::kSuccess) {
-          return result.original_status;
-        }
-        return result.task_eligibility_info;
-      };
+      if (tensorflow_runner == nullptr) {
+        return absl::InternalError(
+            "A TensorFlow eligibility eval task was received, but the "
+            "TensorFlow runner factory returned a null runner");
+      }
+      engine::PlanResult result =
+          tensorflow_runner->RunEligibilityEvalPlanWithTensorflowSpec(
+              override_iterator_factories, should_abort, log_manager,
+              opstats_logger, flags, plan, checkpoint_input_filename_path,
+              timing_config, run_computation_start_time, reference_time);
+      if (result.outcome != engine::PlanOutcome::kSuccess) {
+        return result.original_status;
+      }
+      return result.task_eligibility_info;
+    };
+    EetPlanRunnerImpl eet_plan_runner(run_plan_func);
 
-      EetPlanRunnerImpl eet_plan_runner(run_plan_func);
-
-      // TODO: b/290714966 - Return ExampleStats out of the NEET engine so they
-      // can be measured.
-      native_task_eligibility_info = ComputeNativeEligibility(
-          eligibility_eval_task.population_eligibility_spec.value(),
-          *log_manager, phase_logger, opstats_logger, clock,
-          example_iterator_factories, eet_plan_runner, flags);
-    } else {
-      return absl::UnimplementedError(
-          "TensorFlow is required, but no tensorflow runner factory "
-          "registered");
-    }
+    // TODO: b/290714966 - Return ExampleStats out of the NEET engine so they
+    // can be measured.
+    native_task_eligibility_info = ComputeNativeEligibility(
+        eligibility_eval_task.population_eligibility_spec.value(), *log_manager,
+        phase_logger, opstats_logger, clock, example_iterator_factories,
+        eet_plan_runner, flags);
   }
 
   LogNativeEligibilityEvalComputationOutcome(
@@ -1638,7 +1652,7 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     FederatedProtocol* federated_protocol,
     FederatedSelectManager* fedselect_manager,
     engine::ExampleIteratorFactory* opstats_example_iterator_factory,
-    TensorflowRunnerFactory tensorflow_runner_factory,
+    const TensorflowRunnerFactory& tensorflow_runner_factory,
     FLRunnerResult& fl_runner_result, const std::function<bool()>& should_abort,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, absl::string_view source_id_seed) {
@@ -1878,9 +1892,18 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           &opstats_example_iterator_factory,
           env_eligibility_example_iterator_factory.get()};
 
-  auto tensorflow_runner_factory =
+  // Get() returns an empty std::function when no factory is registered. We
+  // check it before constructing the AnyInvocable, because an AnyInvocable
+  // built from an empty std::function is truthy but throws on invocation;
+  // only by skipping construction do we get a correctly-empty AnyInvocable
+  // that the downstream check can rely on.
+  auto tensorflow_runner_factory_fn =
       GetGlobalTensorflowRunnerFactoryRegistry().Get(
           TensorflowRunnerImplementation::kTensorflowRunnerImpl);
+  TensorflowRunnerFactory tensorflow_runner_factory;
+  if (tensorflow_runner_factory_fn) {
+    tensorflow_runner_factory = std::move(tensorflow_runner_factory_fn);
+  }
 
   // Note that this method will update fl_runner_result's fields with values
   // received over the course of the eligibility eval protocol interaction.
