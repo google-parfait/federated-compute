@@ -182,8 +182,8 @@ class MinSepDataSourceIterator(
     instance._round_index = state.round_index
     shuffling_arr = np.frombuffer(state.shuffling_prng_key, dtype=np.uint32)
     selection_arr = np.frombuffer(state.selection_prng_key, dtype=np.uint32)
-    instance._shuffling_prng_key = jax.random.wrap_key_data(shuffling_arr)
-    instance._selection_prng_key = jax.random.wrap_key_data(selection_arr)
+    instance._shuffling_prng_key = jax.random.wrap_key_data(shuffling_arr)  # pyrefly: ignore[bad-argument-type]
+    instance._selection_prng_key = jax.random.wrap_key_data(selection_arr)  # pyrefly: ignore[bad-argument-type]
 
     # Re-compute round assignments using the restored shuffling key.
     instance._blob_id_round_assignments = assign_blob_ids_to_rounds(
@@ -295,7 +295,7 @@ class MinSepDataSourceIterator(
       return selected_values
 
     with concurrent.futures.ThreadPoolExecutor(
-        max_workers=os.cpu_count() * 4
+        max_workers=os.cpu_count() * 4  # pyrefly: ignore[unsupported-operation]
     ) as executor:
       future_to_blob_id = {}
       for blob_id in selected_ids:

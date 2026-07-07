@@ -201,7 +201,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
       self.assertLen(data_for_round, k)
 
       # Track which rounds clients are chosen to participate in.
-      for value in data_for_round:
+      for value in data_for_round:  # pyrefly: ignore[not-iterable]
         if use_data_pointers:
           self.assertIsInstance(value, computation_pb2.Computation)
           self.assertEqual(value.type, _COMPUTATION_TYPE)

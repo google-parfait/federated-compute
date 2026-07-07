@@ -28,7 +28,7 @@ def _create_test_grad_privatizer():
     # coverage of the privatizer noise is done in the JaxPrivacy library.
     return sum_of_clipped_grads, noise_state + 1
 
-  return optax.GradientTransformation(init, privatize)
+  return optax.GradientTransformation(init, privatize)  # pyrefly: ignore[bad-argument-type]
 
 
 class DPMFAggregatorFactoryExecutionTest(tf.test.TestCase):
