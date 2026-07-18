@@ -388,7 +388,8 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
     const std::string& output_checkpoint_filename,
     bool use_client_report_wire_format, bool enable_event_time_data_upload,
     std::optional<absl::string_view> source_id, bool uses_confidential_agg,
-    bool enable_private_logger, bool drop_out_based_data_availability) {
+    bool enable_private_logger, bool drop_out_based_data_availability,
+    bool enable_privacy_id_v2) {
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
   bool has_event_time_range = false;
@@ -513,9 +514,10 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
                   "Privacy ID is only supported for client report wire "
                   "format."));
         }
-        absl::StatusOr<SplitResults> split_results = SplitResultsByPrivacyId(
-            example_query, example_query_result,
-            example_query_spec.privacy_id_config(), *source_id);
+        absl::StatusOr<SplitResults> split_results =
+            SplitResultsByPrivacyId(example_query, example_query_result,
+                                    example_query_spec.privacy_id_config(),
+                                    *source_id, enable_privacy_id_v2);
         if (!split_results.ok()) {
           return PlanResult(PlanOutcome::kExampleIteratorError,
                             split_results.status());

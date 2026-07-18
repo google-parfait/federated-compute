@@ -358,7 +358,8 @@ class ExampleQueryPlanEngineTest : public testing::Test {
         /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
         /*uses_confidential_agg=*/false,
         /*enable_private_logger=*/true,
-        /*drop_out_based_data_availability=*/false);
+        /*drop_out_based_data_availability=*/false,
+        /*enable_privacy_id_v2=*/false);
 
     ASSERT_THAT(result.outcome, PlanOutcome::kSuccess)
         << result.original_status;
@@ -437,7 +438,8 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -475,7 +477,8 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecTypeMismatch) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -495,7 +498,8 @@ TEST_F(ExampleQueryPlanEngineTest, FactoryNotFound) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -515,7 +519,8 @@ TEST_F(ExampleQueryPlanEngineTest, NoIteratorCreated) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -547,7 +552,8 @@ TEST_F(ExampleQueryPlanEngineTest, InvalidExampleQueryResultFormat) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -570,7 +576,8 @@ TEST_F(ExampleQueryPlanEngineTest,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
   ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
@@ -674,7 +681,8 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerVectorNamesAreRewritten) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/true,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
   ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
@@ -783,7 +791,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithEventTimeRange) {
       /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -910,7 +919,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
       /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1035,7 +1045,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
       /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1093,7 +1104,8 @@ TEST_F(ExampleQueryPlanEngineTest, MissingEndEventTimeFails) {
       /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -1146,7 +1158,8 @@ TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1226,7 +1239,8 @@ TEST_F(ExampleQueryPlanEngineTest, TwoQueryDirectDataUploadTaskSucceeds) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1330,7 +1344,8 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1391,7 +1406,8 @@ TEST_F(ExampleQueryPlanEngineTest, SufficientData) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/true);
+      /*drop_out_based_data_availability=*/true,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 }
@@ -1453,7 +1469,8 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQueryInsufficientData) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/true);
+      /*drop_out_based_data_availability=*/true,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kInsufficientData);
   EXPECT_EQ(result.original_status.code(),
@@ -1517,7 +1534,8 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQuerySufficientData) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/true);
+      /*drop_out_based_data_availability=*/true,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
   ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
@@ -1604,7 +1622,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithBytesValues) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
   ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
@@ -1770,16 +1789,17 @@ class PrivacyIdSplittingTest : public testing::Test {
                              std::optional<std::string> source_id = "source_id",
                              bool uses_confidential_agg = true,
                              bool enable_private_logger = false,
-                             bool drop_out_based_data_availability = false) {
+                             bool drop_out_based_data_availability = false,
+                             bool enable_privacy_id_v2 = false) {
     ExampleQueryPlanEngine plan_engine(
         {example_iterator_factory_.get()}, &mock_opstats_logger_,
         /*example_iterator_query_recorder=*/nullptr,
         /*tensorflow_runner_factory=*/nullptr);
-    return plan_engine.RunPlan(spec, "unused output checkpoint filename",
-                               /*use_client_report_wire_format=*/true,
-                               enable_event_time_data_upload, source_id,
-                               uses_confidential_agg, enable_private_logger,
-                               drop_out_based_data_availability);
+    return plan_engine.RunPlan(
+        spec, "unused output checkpoint filename",
+        /*use_client_report_wire_format=*/true, enable_event_time_data_upload,
+        source_id, uses_confidential_agg, enable_private_logger,
+        drop_out_based_data_availability, enable_privacy_id_v2);
   }
 
   StrictMock<MockOpStatsLogger> mock_opstats_logger_;
@@ -2253,6 +2273,44 @@ TEST_F(PrivacyIdSplittingTest, PrivacyIdSplitDisabledNoPrivacyIdConfig) {
   EXPECT_EQ(result.federated_compute_checkpoints[0].metadata, std::nullopt);
 }
 
+TEST_F(PrivacyIdSplittingTest, NonRotatingPrivacyIdWithV2FlagEnabled) {
+  // Set output_rows_count before Initialize() serializes the data, since the
+  // non-rotating path uses this to detect empty results.
+  example_query_result_.mutable_stats()->set_output_rows_count(2);
+  Initialize();
+  // Remove the windowing schedule to make this a non-rotating privacy ID
+  // config.
+  client_only_plan_.mutable_phase()
+      ->mutable_example_query_spec()
+      ->mutable_privacy_id_config()
+      ->clear_windowing_schedule();
+
+  EXPECT_CALL(
+      mock_opstats_logger_,
+      UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
+  engine::PlanResult result =
+      RunPlan(client_only_plan_.phase().example_query_spec(),
+              /*enable_event_time_data_upload=*/true,
+              /*source_id=*/"source_id", /*uses_confidential_agg=*/true,
+              /*enable_private_logger=*/false,
+              /*drop_out_based_data_availability=*/false,
+              /*enable_privacy_id_v2=*/true);
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+  // Non-rotating config means all rows are in one group.
+  ASSERT_THAT(result.federated_compute_checkpoints, testing::SizeIs(1));
+
+  ASSERT_THAT(
+      result.federated_compute_checkpoints[0],
+      FederatedComputeCheckpointContains(CreateUnsplitExpectedTensors()));
+  EXPECT_THAT(result.federated_compute_checkpoints,
+              testing::Each(HasPrivacyIdTensor()));
+  EXPECT_THAT(result.federated_compute_checkpoints[0],
+              HasEventTimeRange(CreateEventTimeRange(
+                  /*start_year=*/2024, /*start_month=*/1,
+                  /*start_day=*/1, /*start_hours=*/10,
+                  /*end_year=*/2024, /*end_month=*/1,
+                  /*end_day=*/2, /*end_hours=*/23)));
+}
 
 // Case 1: kPrivateLoggerEntryKey is present and contains base64 encoded
 // strings. Verifies that existing base64 encoded strings are preserved.
@@ -2301,7 +2359,8 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerOnlyEntriesPresent) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/true,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   ASSERT_THAT(result.outcome, PlanOutcome::kSuccess);
   ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
@@ -2387,7 +2446,8 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerEntryAsBytes) {
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false,
       /*enable_private_logger=*/true,
-      /*drop_out_based_data_availability=*/false);
+      /*drop_out_based_data_availability=*/false,
+      /*enable_privacy_id_v2=*/false);
 
   ASSERT_THAT(result.outcome, PlanOutcome::kSuccess);
   ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));

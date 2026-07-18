@@ -22,7 +22,6 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "absl/time/civil_time.h"
 #include "fcp/client/example_query_result.pb.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -30,11 +29,6 @@
 namespace fcp {
 namespace client {
 namespace engine {
-
-// Deterministically derive a 16 byte privacy ID from the source ID and window
-// start.
-absl::StatusOr<std::string> GetPrivacyId(absl::string_view source_id,
-                                         absl::CivilSecond window_start);
 
 // ExampleQueryResult corresponding to a specific privacy ID.
 struct PerPrivacyIdResult {
@@ -54,6 +48,8 @@ struct SplitResults {
 // Requires that the ExampleQueryResult has an event time column with the
 // kEventTimeColumnName. Event times should be in the format
 // YYYY-MM-DDTHH:MM:SS[+-]HH:MM.
+// If the privacy_id_config.windowing_schedule is unset, all rows are assigned
+// the same non-rotating privacy ID.
 // ExampleQueryResult must not already have a column with the
 // kPrivacyIdColumnName.
 absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
@@ -61,7 +57,7 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
         example_query,
     const fcp::client::ExampleQueryResult& example_query_result,
     const google::internal::federated::plan::PrivacyIdConfig& privacy_id_config,
-    absl::string_view source_id);
+    absl::string_view source_id, bool enable_privacy_id_v2);
 }  // namespace engine
 }  // namespace client
 }  // namespace fcp

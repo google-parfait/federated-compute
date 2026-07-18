@@ -30,7 +30,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "absl/time/civil_time.h"
 #include "fcp/client/event_time_range.pb.h"
 #include "fcp/client/example_query_result.pb.h"
 #include "fcp/confidentialcompute/constants.h"
@@ -48,15 +47,20 @@ using ::fcp::EqualsProto;
 using ::fcp::confidentialcompute::WindowingSchedule;
 using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::PrivacyIdConfig;
-using ::testing::Eq;
 using ::testing::ExplainMatchResult;
+using ::testing::Field;
 using ::testing::HasSubstr;
+using ::testing::IsEmpty;
+using ::testing::Not;
 using ::testing::UnorderedElementsAre;
 
-MATCHER_P2(PerPrivacyIdResultIs, privacy_id, example_query_result, "") {
-  return ExplainMatchResult(Eq(privacy_id), arg.privacy_id, result_listener) &&
-         ExplainMatchResult(EqualsProto(example_query_result),
-                            arg.example_query_result, result_listener);
+MATCHER_P(PerPrivacyIdResultHasResult, example_query_result, "") {
+  return ExplainMatchResult(
+             Field(&PerPrivacyIdResult::privacy_id, Not(IsEmpty())), arg,
+             result_listener) &&
+         ExplainMatchResult(Field(&PerPrivacyIdResult::example_query_result,
+                                  EqualsProto(example_query_result)),
+                            arg, result_listener);
 }
 
 PrivacyIdConfig CreatePrivacyIdConfig(
@@ -86,7 +90,6 @@ PrivacyIdConfig CreatePrivacyIdConfig(
       WindowingSchedule::CivilTimeWindowSchedule::IGNORE);
   return config;
 }
-
 
 ExampleQuerySpec::ExampleQuery CreateExampleQuery() {
   return PARSE_TEXT_PROTO(R"pb(
@@ -149,24 +152,10 @@ ExampleQueryResult AddPrivacyId(ExampleQueryResult result,
   return result;
 }
 
-TEST(PrivacyIdUtilsTest, GetPrivacyId) {
-  absl::string_view source_id = "test_source";
-  absl::CivilSecond window_start(2024, 5, 15, 10, 0, 0);
-
-  absl::StatusOr<std::string> id1 = GetPrivacyId(source_id, window_start);
-  ABSL_ASSERT_OK(id1);
-  absl::StatusOr<std::string> id2 = GetPrivacyId(source_id, window_start);
-  EXPECT_EQ(*id1, *id2);
-
-  absl::CivilSecond different_window(2024, 5, 15, 11, 0, 0);
-  absl::StatusOr<std::string> id3 = GetPrivacyId(source_id, different_window);
-  EXPECT_NE(*id1, *id3);
-
-  absl::StatusOr<std::string> id4 = GetPrivacyId("other_source", window_start);
-  EXPECT_NE(*id1, *id4);
-}
-
-TEST(PrivacyIdUtilsTest, MissingWindowSchedule) {
+// Tests that a windowing_schedule with no civil_time_window_schedule inside it
+// returns an error. The flag value is irrelevant here since
+// has_windowing_schedule() is true, so the windowed path always runs.
+TEST(PrivacyIdUtilsTest, MissingCivilTimeWindowSchedule) {
   PrivacyIdConfig config = CreatePrivacyIdConfig(
       /*window_size=*/1,
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
@@ -177,7 +166,8 @@ TEST(PrivacyIdUtilsTest, MissingWindowSchedule) {
        "2024-01-01T08:00:00-09:00"},
       {1, 2, 3});
   EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
-                                      config, "test_source"),
+                                      config, "test_source",
+                                      /*enable_privacy_id_v2=*/false),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Missing CivilTimeWindowSchedule")));
 }
@@ -196,7 +186,8 @@ TEST(PrivacyIdUtilsTest, NonTumblingWindow) {
        "2024-01-01T08:00:00-09:00"},
       {1, 2, 3});
   EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
-                                      config, "test_source"),
+                                      config, "test_source",
+                                      /*enable_privacy_id_v2=*/true),
               StatusIs(absl::StatusCode::kUnimplemented,
                        HasSubstr("Only tumbling windows are supported")));
 }
@@ -211,7 +202,8 @@ TEST(PrivacyIdUtilsTest, InvalidWindowSize) {
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
       /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
   EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
-                                      config, "test_source"),
+                                      config, "test_source",
+                                      /*enable_privacy_id_v2=*/true),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Window size must be positive")));
 
@@ -220,7 +212,8 @@ TEST(PrivacyIdUtilsTest, InvalidWindowSize) {
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
       /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
   EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
-                                      config, "test_source"),
+                                      config, "test_source",
+                                      /*enable_privacy_id_v2=*/true),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Window size must be positive")));
 }
@@ -239,33 +232,28 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdSucceeds) {
       {1, 2, 3});
 
   absl::StatusOr<SplitResults> split_results = SplitResultsByPrivacyId(
-      CreateExampleQuery(), query_result, config, "test_source");
+      CreateExampleQuery(), query_result, config, "test_source",
+      /*enable_privacy_id_v2=*/true);
   ABSL_ASSERT_OK(split_results);
 
-  absl::StatusOr<std::string> privacy_id_1 =
-      GetPrivacyId("test_source", absl::CivilDay(2024, 1, 1));
-  ABSL_ASSERT_OK(privacy_id_1);
-  absl::StatusOr<std::string> privacy_id_2 =
-      GetPrivacyId("test_source", absl::CivilDay(2024, 1, 2));
-  ABSL_ASSERT_OK(privacy_id_2);
-
-  EXPECT_THAT(
+  // Verify rows are grouped correctly by day, with distinct non-empty privacy
+  // IDs per group. Row values {1, 3} are from Jan 1, value {2} from Jan 2.
+  // Event times are truncated to CivilHour for the event time range.
+  ASSERT_THAT(
       split_results->per_privacy_id_results,
       UnorderedElementsAre(
-          PerPrivacyIdResultIs(
-              *privacy_id_1,
-              AddEventTimeRange(
-                  CreateExampleQueryResult({"2024-01-01T10:15:00+00:00",
-                                            "2024-01-01T08:00:00-09:00"},
-                                           {1, 3}),
-                  CreateDateTime(2024, 1, 1, 8, 0, 0),
-                  CreateDateTime(2024, 1, 1, 10, 0, 0))),
-          PerPrivacyIdResultIs(
-              *privacy_id_2,
-              AddEventTimeRange(
-                  CreateExampleQueryResult({"2024-01-02T12:00:00+00:00"}, {2}),
-                  CreateDateTime(2024, 1, 2, 12, 0, 0),
-                  CreateDateTime(2024, 1, 2, 12, 0, 0)))));
+          PerPrivacyIdResultHasResult(AddEventTimeRange(
+              CreateExampleQueryResult(
+                  {"2024-01-01T10:15:00+00:00", "2024-01-01T08:00:00-09:00"},
+                  {1, 3}),
+              CreateDateTime(2024, 1, 1, 8, 0, 0),
+              CreateDateTime(2024, 1, 1, 10, 0, 0))),
+          PerPrivacyIdResultHasResult(AddEventTimeRange(
+              CreateExampleQueryResult({"2024-01-02T12:00:00+00:00"}, {2}),
+              CreateDateTime(2024, 1, 2, 12, 0, 0),
+              CreateDateTime(2024, 1, 2, 12, 0, 0)))));
+  EXPECT_NE(split_results->per_privacy_id_results[0].privacy_id,
+            split_results->per_privacy_id_results[1].privacy_id);
 }
 
 TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdNoEventTimeColumn) {
@@ -279,7 +267,8 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdNoEventTimeColumn) {
       absl::StrCat("prefix/", confidential_compute::kEventTimeColumnName));
 
   EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
-                                      config, "test_source"),
+                                      config, "test_source",
+                                      /*enable_privacy_id_v2=*/true),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Required column ending with")));
 }
@@ -297,7 +286,8 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdMultipleEventTimeColumns) {
        ExampleQueryResult::VectorData::Values()});
 
   EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
-                                      config, "test_source"),
+                                      config, "test_source",
+                                      /*enable_privacy_id_v2=*/true),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Multiple columns found ending with")));
 }
@@ -317,7 +307,8 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdWrongEventTimeType) {
 
   EXPECT_THAT(
       SplitResultsByPrivacyId(CreateExampleQuery(), query_result, config,
-                              "test_source"),
+                              "test_source",
+                              /*enable_privacy_id_v2=*/true),
       StatusIs(
           absl::StatusCode::kInvalidArgument,
           HasSubstr(
@@ -333,7 +324,8 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdInvalidEventTimeFormat) {
       CreateExampleQueryResult({"invalid event time"}, {1});
 
   EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
-                                      config, "test_source"),
+                                      config, "test_source",
+                                      /*enable_privacy_id_v2=*/true),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Invalid event time format")));
 }
@@ -347,7 +339,8 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdEventTimeWithoutTimezone) {
       CreateExampleQueryResult({"2024-01-01T10:00:00"}, {1});
 
   EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
-                                      config, "test_source"),
+                                      config, "test_source",
+                                      /*enable_privacy_id_v2=*/true),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Invalid event time format")));
 }
@@ -362,7 +355,8 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdAlreadyHasPrivacyId) {
                    "existing_id");
   EXPECT_THAT(
       SplitResultsByPrivacyId(CreateExampleQuery(), query_result, config,
-                              "test_source"),
+                              "test_source",
+                              /*enable_privacy_id_v2=*/true),
       StatusIs(absl::StatusCode::kInvalidArgument,
                HasSubstr("Privacy ID column cannot already exist in the "
                          "example query result")));
@@ -376,22 +370,61 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdEmptyResult) {
   ExampleQueryResult query_result = CreateExampleQueryResult({}, {});
 
   absl::StatusOr<SplitResults> split_results = SplitResultsByPrivacyId(
-      CreateExampleQuery(), query_result, config, "test_source");
+      CreateExampleQuery(), query_result, config, "test_source",
+      /*enable_privacy_id_v2=*/true);
   ABSL_ASSERT_OK(split_results);
   EXPECT_THAT(split_results->per_privacy_id_results, testing::IsEmpty());
 }
 
-TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdNoWindowingSchedule) {
+TEST(PrivacyIdUtilsTest,
+     SplitResultsByPrivacyIdNoWindowingScheduleWithEventTime) {
   PrivacyIdConfig config;
 
   ExampleQueryResult query_result = CreateExampleQueryResult(
       {"2024-01-01T10:15:00+00:00", "2024-01-02T12:00:00+00:00"}, {1, 2});
 
   absl::StatusOr<SplitResults> split_results = SplitResultsByPrivacyId(
-      CreateExampleQuery(), query_result, config, "test_source");
+      CreateExampleQuery(), query_result, config, "test_source",
+      /*enable_privacy_id_v2=*/true);
+  ABSL_ASSERT_OK(split_results);
 
-  // Windowing schedule is required, so this should fail.
-  EXPECT_THAT(split_results,
+  // All rows should be grouped under a single non-rotating privacy ID.
+  // Event times are truncated to CivilHour for the event time range.
+  ASSERT_THAT(
+      split_results->per_privacy_id_results,
+      UnorderedElementsAre(PerPrivacyIdResultHasResult(AddEventTimeRange(
+          CreateExampleQueryResult(
+              {"2024-01-01T10:15:00+00:00", "2024-01-02T12:00:00+00:00"},
+              {1, 2}),
+          CreateDateTime(2024, 1, 1, 10, 0, 0),
+          CreateDateTime(2024, 1, 2, 12, 0, 0)))));
+}
+
+TEST(PrivacyIdUtilsTest,
+     SplitResultsByPrivacyIdNoWindowingScheduleEmptyResult) {
+  PrivacyIdConfig config;
+  ExampleQueryResult query_result = CreateExampleQueryResult({}, {});
+
+  absl::StatusOr<SplitResults> split_results = SplitResultsByPrivacyId(
+      CreateExampleQuery(), query_result, config, "test_source",
+      /*enable_privacy_id_v2=*/true);
+  ABSL_ASSERT_OK(split_results);
+  // Should not return any results.
+  EXPECT_THAT(split_results->per_privacy_id_results, testing::IsEmpty());
+}
+
+// Verifies that when enable_privacy_id_v2 is false and there is no windowing
+// schedule, the old code path is taken: the windowed path
+// is taken and returns an error because the schedule is missing.
+TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdNoWindowingScheduleFlagOff) {
+  PrivacyIdConfig config;
+
+  ExampleQueryResult query_result = CreateExampleQueryResult(
+      {"2024-01-01T10:15:00+00:00", "2024-01-02T12:00:00+00:00"}, {1, 2});
+
+  EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
+                                      config, "test_source",
+                                      /*enable_privacy_id_v2=*/false),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Missing CivilTimeWindowSchedule")));
 }
