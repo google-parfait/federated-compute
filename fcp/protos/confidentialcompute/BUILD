@@ -290,6 +290,9 @@ cc_proto_library(
 proto_library(
     name = "mauve_score_config_proto",
     srcs = ["mauve_score_config.proto"],
+    deps = [
+        ":access_policy_proto",
+    ],
 )
 
 cc_proto_library(

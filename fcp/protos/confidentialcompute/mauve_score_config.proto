@@ -16,6 +16,8 @@ syntax = "proto3";  // Our OSS build does not support editions.
 
 package fcp.confidentialcompute;
 
+import "fcp/protos/confidentialcompute/access_policy.proto";
+
 option java_multiple_files = true;
 option java_package = "com.google.intelligence.fcp.confidentialcompute";
 option java_outer_classname = "MauveScoreConfigProto";
@@ -72,4 +74,11 @@ message MauveScoreResult {
 
   // KL divergence metrics computed at various lambda values.
   repeated KlMetric kl_metrics = 9;
+}
+
+// Config constraints for the MauveScore container that must be validated before
+// any of the blobs written to the container are processed.
+message MauveScoreContainerConfigConstraints {
+  // Defines limits on the accesses to blobs.
+  AccessBudget access_budget = 1;
 }
