@@ -282,6 +282,67 @@ TEST(TimeWindowUtilitiesTest, ConvertEventTimeToCivilSecondInvalid) {
                        HasSubstr("Invalid event time format")));
 }
 
+TEST(TimeWindowUtilitiesTest,
+     ConvertEventTimeToCivilSecondValidFractionalSeconds) {
+  // With fractional seconds.
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123+00:00",
+                                            /*allow_fractional_seconds=*/true),
+              IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 13, 5, 0)));
+  // High precision.
+  EXPECT_THAT(
+      ConvertEventTimeToCivilSecond("2025-03-05T01:02:03.123456789-05:00",
+                                    /*allow_fractional_seconds=*/true),
+      IsOkAndHolds(absl::CivilSecond(2025, 3, 5, 1, 2, 3)));
+  // No fractional seconds.
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00+00:00",
+                                            /*allow_fractional_seconds=*/true),
+              IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 13, 5, 0)));
+}
+
+TEST(TimeWindowUtilitiesTest, ConvertEventTimeToCivilSecondValidZTimezone) {
+  // Z offset with fractional seconds.
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123Z",
+                                            /*allow_fractional_seconds=*/true),
+              IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 13, 5, 0)));
+  // Z offset without fractional seconds.
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00Z",
+                                            /*allow_fractional_seconds=*/true),
+              IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 13, 5, 0)));
+}
+
+TEST(TimeWindowUtilitiesTest,
+     ConvertEventTimeToCivilSecondFractionalSecondsEventTimeDisallowed) {
+  // Fractional seconds but allow_fractional_seconds is false.
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123+00:00",
+                                            /*allow_fractional_seconds=*/false),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid event time format")));
+}
+
+TEST(TimeWindowUtilitiesTest,
+     ConvertEventTimeToCivilSecondInvalidFormatsFractionalSecondsAllowed) {
+  // Incorrect fractional seconds delimiter.
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00,123+00:00",
+                                            /*allow_fractional_seconds=*/true),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid event time format")));
+  // Missing timezone offset.
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123",
+                                            /*allow_fractional_seconds=*/true),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid event time format")));
+  // Malformed timezone offset.
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123+00",
+                                            /*allow_fractional_seconds=*/true),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid event time format")));
+  // Incomplete fractional seconds.
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.",
+                                            /*allow_fractional_seconds=*/true),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid event time format")));
+}
+
 }  //  namespace
 }  //  namespace confidentialcompute
 }  //  namespace fcp

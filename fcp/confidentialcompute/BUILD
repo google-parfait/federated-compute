@@ -76,6 +76,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_googleapis//google/type:date_cc_proto",
         "@com_google_googleapis//google/type:timeofday_cc_proto",
+        "@com_googlesource_code_re2//:re2",
     ],
 )
 

@@ -23,8 +23,10 @@
 #include "absl/status/status.h"
 #include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/civil_time.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
+#include "re2/re2.h"
 
 namespace fcp {
 namespace confidentialcompute {
@@ -74,6 +76,24 @@ absl::StatusOr<std::string> RemoveTimezoneFromEventTime(
         "Invalid event time format: missing T or timezone modifier");
   }
   return std::string(event_time.substr(0, 19));
+}
+
+// Format the event time so that it is accepted by absl::ParseCivilTime by
+// removing fractional seconds and timezone modifiers.
+// Expects strings in the format YYYY-MM-DDTHH:MM:SS.fff[+-]HH:MM or
+// YYYY-MM-DDTHH:MM:SS[+-]HH:MM.
+absl::StatusOr<std::string> FormatEventTimeForParseCivilTime(
+    absl::string_view event_time) {
+  // Regex to parse ISO 8601 event time strings. Captures the date-time portion
+  // (YYYY-MM-DDTHH:MM:SS) while discarding optional fractional seconds
+  // (.\d+) and the required timezone suffix ([+-]HH:MM or Z).
+  static constexpr LazyRE2 kEventTimePattern = {
+      R"(^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)$)"};
+  std::string civil_time_part;
+  if (!RE2::FullMatch(event_time, *kEventTimePattern, &civil_time_part)) {
+    return absl::InvalidArgumentError("Invalid event time format");
+  }
+  return civil_time_part;
 }
 
 }  // namespace
@@ -148,11 +168,18 @@ absl::StatusOr<absl::CivilSecond> GetTimeWindowStart(
 }
 
 absl::StatusOr<absl::CivilSecond> ConvertEventTimeToCivilSecond(
-    absl::string_view event_time) {
-  ABSL_ASSIGN_OR_RETURN(std::string event_time_without_timezone,
-                        RemoveTimezoneFromEventTime(event_time));
+    absl::string_view event_time, bool allow_fractional_seconds) {
+  std::string formatted_event_time;
+  if (allow_fractional_seconds) {
+    ABSL_ASSIGN_OR_RETURN(formatted_event_time,
+                          FormatEventTimeForParseCivilTime(event_time));
+  } else {
+    ABSL_ASSIGN_OR_RETURN(formatted_event_time,
+                          RemoveTimezoneFromEventTime(event_time));
+  }
+
   absl::CivilSecond event_civil_second;
-  if (!absl::ParseCivilTime(event_time_without_timezone, &event_civil_second)) {
+  if (!absl::ParseCivilTime(formatted_event_time, &event_civil_second)) {
     return absl::InvalidArgumentError("Invalid event time format");
   }
   return event_civil_second;
