@@ -71,7 +71,13 @@ def assign_blob_ids_to_rounds(
   Returns:
     A list of lists of blob ids, where the outer list has length `min_sep`
     and the inner lists contain the blob ids assigned to each round.
+
+  Raises:
+    ValueError: If `blob_ids` are not unique.
   """
+  if len(set(blob_ids)) != len(blob_ids):
+    raise ValueError('Expected `blob_ids` to be unique.')
+
   shuffled_blob_indices = jax.random.permutation(key, len(blob_ids))
   blob_id_round_assignments = [[] for _ in range(min_sep)]
   for i, blob_index in enumerate(shuffled_blob_indices):

@@ -107,6 +107,7 @@ py_test(
         "@federated_language//federated_language/proto:data_type_py_pb2",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
         "@pypi//absl_py",
+        "@pypi//jax",
     ],
 )
 

@@ -21,6 +21,7 @@ from absl.testing import parameterized
 from federated_language.proto import array_pb2
 from federated_language.proto import computation_pb2
 from federated_language.proto import data_type_pb2
+import jax
 
 from fcp.confidentialcompute.python import external_service_handle
 from fcp.confidentialcompute.python import min_sep_data_source
@@ -81,6 +82,18 @@ def _create_external_handle(
   )
 
 
+class AssignBlobIdsToRoundsTest(absltest.TestCase):
+
+  def test_raises_value_error_with_duplicate_blob_ids(self):
+    blob_ids = [b'a', b'b', b'a']
+    with self.assertRaisesRegex(
+        ValueError, 'Expected `blob_ids` to be unique.'
+    ):
+      min_sep_data_source.assign_blob_ids_to_rounds(
+          jax.random.key(0), blob_ids, _MIN_SEP
+      )
+
+
 class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
   def test_init_raises_value_error_with_blob_ids_empty(self):
@@ -90,6 +103,21 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
     with self.assertRaisesRegex(
         ValueError, 'Expected `blob_ids` to not be empty.'
+    ):
+      min_sep_data_source.MinSepDataSourceIterator(
+          _MIN_SEP,
+          external_handle,
+          _COMPUTATION_TYPE,
+          _KEY_NAME,
+      )
+
+  def test_init_raises_value_error_with_duplicate_blob_ids(self):
+    blob_ids = [b'a', b'b', b'a']
+
+    external_handle = _create_external_handle(blob_ids=blob_ids)
+
+    with self.assertRaisesRegex(
+        ValueError, 'Expected `blob_ids` to be unique.'
     ):
       min_sep_data_source.MinSepDataSourceIterator(
           _MIN_SEP,
@@ -455,6 +483,21 @@ class MinSepDataSourceTest(absltest.TestCase):
           _COMPUTATION_TYPE,
           _KEY_NAME,
       )
+
+  def test_iterator_raises_value_error_with_duplicate_blob_ids(self):
+    blob_ids = [b'a', b'b', b'a']
+    external_handle = _create_external_handle(blob_ids=blob_ids)
+    data_source = min_sep_data_source.MinSepDataSource(
+        _MIN_SEP,
+        external_handle,
+        _COMPUTATION_TYPE,
+        _KEY_NAME,
+    )
+
+    with self.assertRaisesRegex(
+        ValueError, 'Expected `blob_ids` to be unique.'
+    ):
+      data_source.iterator()
 
   def test_init_raises_value_error_with_invalid_min_sep(self):
     min_sep = 0
