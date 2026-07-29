@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 import time
 from unittest import mock
 
@@ -22,6 +22,7 @@ from federated_language.proto import array_pb2
 from federated_language.proto import computation_pb2
 from federated_language.proto import data_type_pb2
 import jax
+import numpy as np
 
 from fcp.confidentialcompute.python import external_service_handle
 from fcp.confidentialcompute.python import min_sep_data_source
@@ -61,9 +62,17 @@ def _mock_restore_recovery_info(key: str) -> bytes | None:
   return b''
 
 
+def _mock_resolve_blob_id_to_numpy_dict(
+    blob_id: bytes,
+) -> Mapping[str, np.ndarray]:
+  del blob_id  # Unused
+  return {}
+
+
 def _create_external_handle(
     blob_ids=None,
     resolve_fn=None,
+    resolve_numpy_fn=None,
 ):
   """Creates an ExternalServiceHandle with default mock functions."""
   if blob_ids is None:
@@ -74,6 +83,8 @@ def _create_external_handle(
       config_id_to_filename={},
       resolve_blob_id_to_tensor_fn=resolve_fn
       or mock.create_autospec(_mock_resolve_blob_id_to_tensor),
+      resolve_blob_id_to_numpy_dict_fn=resolve_numpy_fn
+      or mock.create_autospec(_mock_resolve_blob_id_to_numpy_dict),
       release_unencrypted_fn=mock.create_autospec(_mock_release_unencrypted),
       save_recovery_info_fn=mock.create_autospec(_mock_save_recovery_info),
       restore_recovery_info_fn=mock.create_autospec(

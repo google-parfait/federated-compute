@@ -16,6 +16,7 @@ from collections.abc import Mapping, Sequence
 from unittest import mock
 
 from absl.testing import absltest
+import numpy as np
 
 from fcp.confidentialcompute.python import external_service_handle
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
@@ -30,6 +31,13 @@ def _mock_resolve_blob_id_to_tensor(
 ) -> tensor_pb2.TensorProto:
   del blob_id, key  # Unused
   return tensor_pb2.TensorProto()
+
+
+def _mock_resolve_blob_id_to_numpy_dict(
+    blob_id: bytes,
+) -> Mapping[str, np.ndarray]:
+  del blob_id  # Unused
+  return {'test_key': np.array([1, 2, 3])}
 
 
 def _mock_release_unencrypted(value: bytes, key: str) -> None:
@@ -54,6 +62,7 @@ def _create_external_handle(
     blob_ids: Sequence[bytes] | None = None,
     config_id_to_filename: Mapping[str, str] | None = None,
     resolve_blob_id_to_tensor_fn=None,
+    resolve_blob_id_to_numpy_dict_fn=None,
     release_unencrypted_fn=None,
     save_recovery_info_fn=None,
     restore_recovery_info_fn=None,
@@ -65,6 +74,8 @@ def _create_external_handle(
       config_id_to_filename if config_id_to_filename is not None else {},
       resolve_blob_id_to_tensor_fn=resolve_blob_id_to_tensor_fn
       or mock.create_autospec(_mock_resolve_blob_id_to_tensor),
+      resolve_blob_id_to_numpy_dict_fn=resolve_blob_id_to_numpy_dict_fn
+      or mock.create_autospec(_mock_resolve_blob_id_to_numpy_dict),
       release_unencrypted_fn=release_unencrypted_fn
       or mock.create_autospec(_mock_release_unencrypted),
       save_recovery_info_fn=save_recovery_info_fn
@@ -116,6 +127,18 @@ class ExternalServiceHandleTest(absltest.TestCase):
     self.assertEqual(tensor.content, b'test_tensor_content')
     external_handle._resolve_blob_id_to_tensor_fn.assert_called_once_with(
         b'blob_id', 'key'
+    )
+
+  def test_resolve_blob_id_to_numpy_dict(self):
+    external_handle = _create_external_handle()
+    external_handle._resolve_blob_id_to_numpy_dict_fn.return_value = {
+        'col_a': np.array([10, 20]),
+    }
+    result = external_handle.resolve_blob_id_to_numpy_dict(b'blob_id')
+    self.assertIn('col_a', result)
+    np.testing.assert_array_equal(result['col_a'], np.array([10, 20]))
+    external_handle._resolve_blob_id_to_numpy_dict_fn.assert_called_once_with(
+        b'blob_id'
     )
 
   def test_release_unencrypted(self):

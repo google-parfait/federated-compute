@@ -47,6 +47,7 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
+        "@pypi//numpy",
     ],
 )
 
@@ -57,6 +58,7 @@ py_test(
         ":external_service_handle",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
         "@pypi//absl_py",
+        "@pypi//numpy",
     ],
 )
 
@@ -108,6 +110,7 @@ py_test(
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
         "@pypi//absl_py",
         "@pypi//jax",
+        "@pypi//numpy",
     ],
 )
 

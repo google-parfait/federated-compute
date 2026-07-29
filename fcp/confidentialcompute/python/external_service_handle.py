@@ -16,6 +16,8 @@
 import abc
 from collections.abc import Callable, Mapping, Sequence
 
+import numpy as np
+
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
 
 
@@ -38,6 +40,9 @@ class ExternalServiceHandle(abc.ABC):
       resolve_blob_id_to_tensor_fn: Callable[
           [bytes, str], tensor_pb2.TensorProto
       ],
+      resolve_blob_id_to_numpy_dict_fn: Callable[
+          [bytes], Mapping[str, np.ndarray]
+      ],
       release_unencrypted_fn: Callable[[bytes, str], None],
       save_recovery_info_fn: Callable[
           [bytes, str, Sequence[tuple[bytes, str]]], None
@@ -56,6 +61,9 @@ class ExternalServiceHandle(abc.ABC):
       resolve_blob_id_to_tensor_fn: A function that resolves pointers to data.
         Expects two args (the blob id and the key) and returns the resolved
         tensor.
+      resolve_blob_id_to_numpy_dict_fn: A function that resolves data pointers
+        as a dictionary of NumPy arrays. Expects one arg (the blob id) and
+        returns a dictionary mapping tensor keys to NumPy arrays.
       release_unencrypted_fn: A function that releases unencrypted values to the
         external service. Expects two args (the data and the key).
       save_recovery_info_fn: A function that saves recovery information. Expects
@@ -70,6 +78,7 @@ class ExternalServiceHandle(abc.ABC):
         config_id_to_filename if config_id_to_filename is not None else {}
     )
     self._resolve_blob_id_to_tensor_fn = resolve_blob_id_to_tensor_fn
+    self._resolve_blob_id_to_numpy_dict_fn = resolve_blob_id_to_numpy_dict_fn
     self._release_unencrypted_fn = release_unencrypted_fn
     self._save_recovery_info_fn = save_recovery_info_fn
     self._restore_recovery_info_fn = restore_recovery_info_fn
@@ -109,6 +118,22 @@ class ExternalServiceHandle(abc.ABC):
       The resolved tensor.
     """
     return self._resolve_blob_id_to_tensor_fn(blob_id, key)
+
+  def resolve_blob_id_to_numpy_dict(
+      self, blob_id: bytes
+  ) -> Mapping[str, np.ndarray]:
+    """Resolves a data pointer to a dictionary of NumPy arrays.
+
+    The client data is assumed to be stored as an FcCheckpoint located at a
+    given blob id.
+
+    Args:
+      blob_id: The blob id at which the FcCheckpoint is located.
+
+    Returns:
+      A dictionary mapping tensor keys/column names to NumPy arrays.
+    """
+    return self._resolve_blob_id_to_numpy_dict_fn(blob_id)
 
   def release_unencrypted(self, value: bytes, key: str) -> None:
     """Releases an unencrypted value.
