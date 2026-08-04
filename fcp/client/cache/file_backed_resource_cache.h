@@ -66,8 +66,8 @@ class FileBackedResourceCache : public ResourceCache {
   // Deletes any stored resources past expiry.
   static absl::StatusOr<std::unique_ptr<FileBackedResourceCache>> Create(
       absl::string_view base_dir, absl::string_view cache_dir,
-      LogManager* log_manager, absl::Clock* clock, int64_t max_cache_size_bytes,
-      bool sanitize_client_cache_id = false);
+      LogManager* log_manager, absl::Clock* clock,
+      int64_t max_cache_size_bytes);
 
   // Implementation of `ResourceCache::Put`.
   //
@@ -100,15 +100,14 @@ class FileBackedResourceCache : public ResourceCache {
       std::unique_ptr<protostore::FileStorage> storage,
       std::filesystem::path cache_dir_path, std::filesystem::path manifest_path,
       LogManager* log_manager, absl::Clock* clock,
-      const int64_t max_cache_size_bytes, bool sanitize_client_cache_id)
+      const int64_t max_cache_size_bytes)
       : storage_(std::move(storage)),
         pds_(std::move(pds)),
         cache_dir_path_(cache_dir_path),
         manifest_path_(manifest_path),
         log_manager_(*log_manager),
         clock_(*clock),
-        max_cache_size_bytes_(max_cache_size_bytes),
-        sanitize_client_cache_id_(sanitize_client_cache_id) {}
+        max_cache_size_bytes_(max_cache_size_bytes) {}
 
   absl::StatusOr<CacheManifest> ReadInternal()
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
@@ -141,7 +140,6 @@ class FileBackedResourceCache : public ResourceCache {
   LogManager& log_manager_;
   absl::Clock& clock_;
   const int64_t max_cache_size_bytes_;
-  const bool sanitize_client_cache_id_;
   absl::Mutex mutex_;
 };
 

@@ -28,6 +28,7 @@
 #include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/escaping.h"
 #include "absl/time/simulated_clock.h"
 #include "absl/time/time.h"
 #include "fcp/client/diag_codes.pb.h"
@@ -198,7 +199,7 @@ TEST_F(FileBackedResourceCacheTest, CacheTooBigFileReturnsResourceExhausted) {
 TEST_F(FileBackedResourceCacheTest, CacheIdGetsBase64Escaped) {
   auto resource_cache = FileBackedResourceCache::Create(
       root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
-      kMaxCacheSizeBytes, /*sanitize_client_cache_id=*/true);
+      kMaxCacheSizeBytes);
   ABSL_ASSERT_OK(resource_cache);
 
   ABSL_EXPECT_OK(
@@ -218,40 +219,6 @@ TEST_F(FileBackedResourceCacheTest, CacheIdGetsBase64Escaped) {
   EXPECT_CALL(log_manager_, LogDiag(testing::A<DebugDiagCode>()))
       .Times(testing::AnyNumber());
   auto get_result = (*resource_cache)->Get("invalid/cache/id", absl::Hours(1));
-  ABSL_ASSERT_OK(get_result);
-  EXPECT_EQ(get_result->resource, Resource1());
-}
-
-TEST_F(FileBackedResourceCacheTest, InvalidCacheIdNotBase64EscapedIfFlagOff) {
-  auto resource_cache = FileBackedResourceCache::Create(
-      root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
-      kMaxCacheSizeBytes, /*sanitize_client_cache_id=*/false);
-  ABSL_ASSERT_OK(resource_cache);
-
-  EXPECT_CALL(log_manager_, LogDiag(testing::A<ProdDiagCode>()))
-      .Times(testing::AnyNumber());
-  EXPECT_CALL(log_manager_, LogDiag(testing::A<DebugDiagCode>()))
-      .Times(testing::AnyNumber());
-
-  // 1. Invalid cache IDs with slashes should fail with kInternal because the
-  // directories don't exist, rather than succeeding due to sanitization.
-  auto put_status =
-      (*resource_cache)
-          ->Put("invalid/cache/id", Resource1(), Metadata(), absl::Hours(1));
-  EXPECT_THAT(put_status, StatusIs(absl::StatusCode::kInternal));
-
-  // 2. Valid cache IDs should be written verbatim to disk.
-  ABSL_EXPECT_OK(
-      (*resource_cache)
-          ->Put("valid_cache_id", Resource1(), Metadata(), absl::Hours(1)));
-
-  // The file should exist on disk directly named "valid_cache_id", not base64
-  // escaped.
-  EXPECT_TRUE(std::filesystem::exists(std::filesystem::path(root_cache_dir_) /
-                                      "fcp" / "cache" / "valid_cache_id"));
-
-  // 3. We should be able to get the file using the original ID.
-  auto get_result = (*resource_cache)->Get("valid_cache_id", absl::Hours(1));
   ABSL_ASSERT_OK(get_result);
   EXPECT_EQ(get_result->resource, Resource1());
 }
@@ -617,7 +584,7 @@ TEST_F(FileBackedResourceCacheTest, FileInManifestButNotInCacheDir) {
   }
 
   // Delete the file we just cached.
-  std::filesystem::remove(cache_dir_ / kKey1);
+  std::filesystem::remove(cache_dir_ / absl::WebSafeBase64Escape(kKey1));
 
   {
     auto resource_cache = FileBackedResourceCache::Create(

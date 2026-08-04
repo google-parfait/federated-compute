@@ -104,8 +104,7 @@ absl::StatusOr<std::unique_ptr<FileBackedResourceCache>>
 FileBackedResourceCache::Create(absl::string_view base_dir,
                                 absl::string_view cache_dir,
                                 LogManager* log_manager, absl::Clock* clock,
-                                int64_t max_cache_size_bytes,
-                                bool sanitize_client_cache_id) {
+                                int64_t max_cache_size_bytes) {
   // Create <cache root>/fcp.
   // Unfortunately NDK's flavor of std::filesystem::path does not support using
   // absl::string_view.
@@ -151,8 +150,7 @@ FileBackedResourceCache::Create(absl::string_view base_dir,
   std::unique_ptr<FileBackedResourceCache> resource_cache =
       absl::WrapUnique(new FileBackedResourceCache(
           std::move(pds), std::move(file_storage), cache_dir_path,
-          manifest_path, log_manager, clock, max_cache_size_bytes,
-          sanitize_client_cache_id));
+          manifest_path, log_manager, clock, max_cache_size_bytes));
   {
     absl::MutexLock lock(resource_cache->mutex_);
     ABSL_RETURN_IF_ERROR(resource_cache->Initialize());
@@ -175,9 +173,7 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
   ABSL_RETURN_IF_ERROR(CleanUp(resource.size(), manifest));
 
   std::string cache_id_str(cache_id);
-  std::string file_name = sanitize_client_cache_id_
-                              ? absl::WebSafeBase64Escape(cache_id_str)
-                              : cache_id_str;
+  std::string file_name = absl::WebSafeBase64Escape(cache_id_str);
   std::filesystem::path cached_file_path = cache_dir_path_ / file_name;
   absl::Time now = clock_.TimeNow();
   absl::Time expiry = now + max_age;
@@ -234,9 +230,7 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
     return absl::NotFoundError(absl::StrCat(cache_id, " not found"));
   }
   CachedResource cached_resource = it->second;
-  // Using the file name is new behavior, so we guard its usage with the flag.
-  std::string file_name =
-      sanitize_client_cache_id_ ? cached_resource.file_name() : cache_id_str;
+  std::string file_name = cached_resource.file_name();
   std::filesystem::path cached_file_path = cache_dir_path_ / file_name;
   google::protobuf::Any metadata = cached_resource.metadata();
   absl::Time now = clock_.TimeNow();

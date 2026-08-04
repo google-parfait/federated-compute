@@ -213,10 +213,6 @@ class Flags {
   // execution.
   virtual bool drop_out_based_data_availability() const { return false; }
 
-  // If true, sanitize the client_cache_id when putting or getting resources
-  // from the file backed resource cache.
-  virtual bool sanitize_client_cache_id() const { return false; }
-
   // If true, enables:
   // - Non-rotating privacy IDs: when a PrivacyIdConfig is set without a
   //   windowing_schedule, all rows are assigned a single privacy ID derived
