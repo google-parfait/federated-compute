@@ -19,7 +19,7 @@ package fcp.confidentialcompute;
 import "proto/attestation/reference_value.proto";
 
 // Initialization config for a program executor TEE container.
-// Next ID: 11
+// Next ID: 12
 message ProgramExecutorTeeInitializeConfig {
   // A list of client blob IDs.
   repeated bytes blob_ids = 9;
@@ -45,6 +45,9 @@ message ProgramExecutorTeeInitializeConfig {
   // The number of calls that can be handled in parallel by the leaf executors.
   // Non-positive values indicate no maximum.
   int64 max_concurrent_computation_calls = 10;
+
+  // Whether to use the ElasticComposingExecutor or ComposingExecutor.
+  bool use_elastic_composing_executor = 11;
 
   reserved 1, 2, 4;
 }
