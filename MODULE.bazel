@@ -85,9 +85,9 @@ bazel_dep(name = "toolchains_llvm", version = "1.6.0", dev_dependency = True)
 # go/keep-sorted start block=yes newline_separated=yes
 archive_override(
     module_name = "oak",
-    integrity = "sha256-rtuvHOijomEegPoOk5SJ7+Csq0PBF/fCA0QfRH1eUS8=",
-    strip_prefix = "oak-2c0f2bf362b13d18c971545937ddfe13d133b4ba",
-    urls = ["https://github.com/project-oak/oak/archive/2c0f2bf362b13d18c971545937ddfe13d133b4ba.tar.gz"],
+    integrity = "sha256-I7HdbkLQ7fhDRap2RUzVYq3W97QNOpKc5TXo0fl/gcQ=",
+    strip_prefix = "oak-f7393a196c9158c28cba2f9b37994a5a349083d9",
+    urls = ["https://github.com/project-oak/oak/archive/f7393a196c9158c28cba2f9b37994a5a349083d9.tar.gz"],
 )
 # go/keep-sorted end
 
