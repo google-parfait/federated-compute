@@ -46,6 +46,11 @@ java_proto_library(
     deps = [":confidential_encryption_config_proto"],
 )
 
+py_proto_library(
+    name = "confidential_encryption_config_py_pb2",
+    deps = [":confidential_encryption_config_proto"],
+)
+
 # The api protos.
 proto_library(
     name = "federated_compute_proto",

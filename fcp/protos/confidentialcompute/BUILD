@@ -129,6 +129,11 @@ java_proto_library(
     deps = [":payload_transparency_proto"],
 )
 
+py_proto_library(
+    name = "payload_transparency_py_pb2",
+    deps = [":payload_transparency_proto"],
+)
+
 proto_library(
     name = "aggregation_client_payload_proto",
     srcs = ["aggregation_client_payload.proto"],
