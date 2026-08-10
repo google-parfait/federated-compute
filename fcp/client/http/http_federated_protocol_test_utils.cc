@@ -600,7 +600,6 @@ HttpFederatedProtocolTest::RunSuccessfulCheckin(
 absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
 HttpFederatedProtocolTest::RunSuccessfulMultipleTaskAssignments(
     bool eligibility_eval_enabled, bool enable_confidential_aggregation,
-    bool enable_attestation_transparency_verifier,
     std::optional<Resource> confidential_data_access_policy,
     std::optional<Resource> signed_endorsements) {
   if (eligibility_eval_enabled) {
@@ -621,8 +620,6 @@ HttpFederatedProtocolTest::RunSuccessfulMultipleTaskAssignments(
   if (enable_confidential_aggregation) {
     request.mutable_resource_capabilities()
         ->set_supports_confidential_aggregation(true);
-  }
-  if (enable_attestation_transparency_verifier) {
     request.mutable_resource_capabilities()
         ->set_supports_attestation_transparency_verifier(true);
   }

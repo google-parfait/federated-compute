@@ -713,8 +713,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_event_time_data_upload, (), (const, override));
   MOCK_METHOD(bool, enable_blob_header_in_http_headers, (), (const, override));
 
-  MOCK_METHOD(bool, enable_attestation_transparency_verifier, (),
-              (const, override));
   MOCK_METHOD(bool, drop_out_based_data_availability, (), (const, override));
   MOCK_METHOD(bool, enable_private_logger, (), (const, override));
   MOCK_METHOD(bool, enable_privacy_id_v2, (), (const, override));

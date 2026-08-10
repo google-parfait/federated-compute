@@ -1071,10 +1071,8 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   if (flags_->enable_confidential_aggregation()) {
     request.mutable_resource_capabilities()
         ->set_supports_confidential_aggregation(true);
-    if (flags_->enable_attestation_transparency_verifier()) {
-      request.mutable_resource_capabilities()
-          ->set_supports_attestation_transparency_verifier(true);
-    }
+    request.mutable_resource_capabilities()
+        ->set_supports_attestation_transparency_verifier(true);
   }
   if (flags_->enable_willow_secure_aggregation()) {
     request.mutable_resource_capabilities()

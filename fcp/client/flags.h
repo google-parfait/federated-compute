@@ -198,12 +198,6 @@ class Flags {
   // If true, enables support for PrivateLogger in the federated compute client.
   virtual bool enable_private_logger() const { return false; }
 
-  // If true, the attestation transparency verifier will be enabled for
-  // confidential aggregation.
-  virtual bool enable_attestation_transparency_verifier() const {
-    return false;
-  }
-
   // If true, willow secure aggregation is advertised & can be used for uploads.
   // The willow protocol is described in https://eprint.iacr.org/2024/936.
   virtual bool enable_willow_secure_aggregation() const { return false; }

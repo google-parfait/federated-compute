@@ -388,7 +388,6 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   RunSuccessfulMultipleTaskAssignments(
       bool eligibility_eval_enabled = true,
       bool enable_confidential_aggregation = false,
-      bool enable_attestation_transparency_verifier = false,
       std::optional<Resource> confidential_data_access_policy = std::nullopt,
       std::optional<Resource> signed_endorsements = std::nullopt);
 

@@ -1489,7 +1489,6 @@ TEST_F(HttpFederatedProtocolTest,
   auto result = RunSuccessfulMultipleTaskAssignments(
       /*eligibility_eval_enabled*/ true,
       /*enable_confidential_aggregation=*/true,
-      /*enable_attestation_transparency_verifier=*/false,
       /*confidential_data_access_policy=*/access_policy_resource);
   ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
@@ -1521,7 +1520,6 @@ TEST_F(
   auto result = RunSuccessfulMultipleTaskAssignments(
       /*eligibility_eval_enabled*/ true,
       /*enable_confidential_aggregation=*/true,
-      /*enable_attestation_transparency_verifier=*/false,
       /*confidential_data_access_policy=*/access_policy_resource);
   ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
@@ -3222,8 +3220,6 @@ TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaConfidentialAggWithAttestationTransparency) {
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_flags_, enable_attestation_transparency_verifier)
-      .WillRepeatedly(Return(true));
 
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
@@ -3238,7 +3234,6 @@ TEST_F(HttpFederatedProtocolTest,
   auto result = RunSuccessfulMultipleTaskAssignments(
       /*eligibility_eval_enabled*/ true,
       /*enable_confidential_aggregation=*/true,
-      /*enable_attestation_transparency_verifier=*/true,
       /*confidential_data_access_policy=*/Resource::default_instance(),
       /*signed_endorsements=*/signed_endorsements_resource);
   ABSL_ASSERT_OK(result);
