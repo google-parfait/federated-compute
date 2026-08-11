@@ -170,7 +170,7 @@ cc_test(
 )
 
 # A command line executable for extracting serialized attestation records (as
-# output by `oak_rust_attestation_verifier.cc`) from a stream of text.
+# output by `attestation_transparency_verifier.cc`) from a stream of text.
 cc_binary(
     name = "extract_attestation_records",
     srcs = ["extract_attestation_records_main.cc"],

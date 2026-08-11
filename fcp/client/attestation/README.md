@@ -1,8 +1,8 @@
 # Remote attestation verification
 
-The code in this directory (`oak_rust_attestation_verifier.cc`) performs remote
-attestation verification of TEE-hosted ledger applications which form part of
-the
+The code in this directory (`attestation_transparency_verifier.cc`) performs
+remote attestation verification of TEE-hosted ledger applications which form
+part of the
 [`ConfidentialAggregations`](/fcp/protos/federatedcompute/confidential_aggregations.proto)
 protocol, as described in the
 [Confidential Federated Computations paper](https://arxiv.org/abs/2404.10764)
@@ -111,10 +111,10 @@ logcat stream will contain an entry that looks as follows:
 
 These records represent a line-wrapped, base64-encoded, and gzip-compressed
 `AttestationVerificationRecord` protobuf (the encoding is performed in
-`oak_rust_attestation_verifier.cc`). We provide an `extract_attestation_records`
-utility for extracting and parsing such records from a log stream. This utility
-will write each extracted record to its own file, in the shape of a serialized
-`AttestationVerificationRecord` proto.
+`attestation_transparency_verifier.cc`). We provide an
+`extract_attestation_records` utility for extracting and parsing such records
+from a log stream. This utility will write each extracted record to its own
+file, in the shape of a serialized `AttestationVerificationRecord` proto.
 
 ```shell
 $ mkdir extracted_records
