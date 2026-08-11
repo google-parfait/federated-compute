@@ -28,6 +28,7 @@ cc_library(
     name = "attestation_transparency_verifier",
     srcs = ["attestation_transparency_verifier.cc"],
     hdrs = ["attestation_transparency_verifier.h"],
+    visibility = ["//visibility:public"],
     deps = [
         ":attestation_verifier",
         "//fcp/confidentialcompute/payload_transparency",
