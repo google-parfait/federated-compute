@@ -194,8 +194,8 @@ message AssociatedMetadata {
   // A list of associated metadata values.
   //
   // It is up to the containers producing and consuming metadata to
-  // determine how associated metadata values should be handled. This
-  // includes whether repeated values with the same type_url are allowed.
+  // determine how associated metadata values should be handled. Repeated values
+  // with the same type_url are NOT allowed.
   repeated google.protobuf.Any metadata = 1;
 }
 
