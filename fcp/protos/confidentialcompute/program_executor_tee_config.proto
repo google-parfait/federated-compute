@@ -19,7 +19,7 @@ package fcp.confidentialcompute;
 import "proto/attestation/reference_value.proto";
 
 // Initialization config for a program executor TEE container.
-// Next ID: 12
+// Next ID: 13
 message ProgramExecutorTeeInitializeConfig {
   // A list of client blob IDs.
   repeated bytes blob_ids = 9;
@@ -46,8 +46,15 @@ message ProgramExecutorTeeInitializeConfig {
   // Non-positive values indicate no maximum.
   int64 max_concurrent_computation_calls = 10;
 
-  // Whether to use the ElasticComposingExecutor or ComposingExecutor.
+  // TODO: b/542276280 - Remove this field once the mergeable execution context
+  // is working.
+  // Whether to use the ElasticComposingExecutor or ComposingExecutor. Should
+  // not be used in conjunction with use_mergeable_execution_context.
   bool use_elastic_composing_executor = 11;
+
+  // Whether to use the mergeable execution context or not. Should not be used
+  // in conjunction with use_elastic_composing_executor.
+  bool use_mergeable_execution_context = 12;
 
   reserved 1, 2, 4;
 }
