@@ -19,7 +19,7 @@ package fcp.confidentialcompute;
 import "proto/attestation/reference_value.proto";
 
 // Initialization config for a program executor TEE container.
-// Next ID: 13
+// Next ID: 14
 message ProgramExecutorTeeInitializeConfig {
   // A list of client blob IDs.
   repeated bytes blob_ids = 9;
@@ -55,6 +55,11 @@ message ProgramExecutorTeeInitializeConfig {
   // Whether to use the mergeable execution context or not. Should not be used
   // in conjunction with use_elastic_composing_executor.
   bool use_mergeable_execution_context = 12;
+
+  // The multiplier to use when computing the number of subrounds for the
+  // mergeable execution context. The number of subrounds will be the number of
+  // workers * this multiplier.
+  int64 mergeable_execution_subrounds_multiplier = 13;
 
   reserved 1, 2, 4;
 }
