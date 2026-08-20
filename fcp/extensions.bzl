@@ -59,9 +59,9 @@ def _fcp_deps_impl(ctx):
 
     http_archive(
         name = "org_tensorflow_federated",
-        integrity = "sha256-88RGxpT8CqgIvMWdUC2rNrM+hjNtccEyRaMD/yzRkdM=",
-        strip_prefix = "tensorflow-federated-c603fa47ebebf9d5e28f5369be3dc2c2f3de721f",
-        url = "https://github.com/google-parfait/tensorflow-federated/archive/c603fa47ebebf9d5e28f5369be3dc2c2f3de721f.tar.gz",
+        integrity = "sha256-+XUSEW04Ku1XUp5yAIC6BRmInmMsCCW2p/dk19te+6w=",
+        strip_prefix = "tensorflow-federated-aa4da04b70147f6a622a7f70d57f9331faee56a5",
+        url = "https://github.com/google-parfait/tensorflow-federated/archive/aa4da04b70147f6a622a7f70d57f9331faee56a5.tar.gz",
     )
 
     http_archive(
