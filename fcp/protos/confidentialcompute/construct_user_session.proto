@@ -25,4 +25,14 @@ message SessionTimeWindowMetadata {
 
   // The end of the session time window. Exclusive.
   google.protobuf.Timestamp session_window_end = 2;
+
+  // The KMS key ids of the original client blobs contributing to this session.
+  // This is required during the migration to time-based budget tracking to
+  // prevent backsliding: when consuming a session blob under the time budget,
+  // the downstream container verifies that the original blobs still have
+  // remaining key-based budget, preventing previously exhausted blobs from
+  // being re-consumed.
+  // TODO: b/552613080 - Remove this field once migration to time-based budgets
+  // is complete.
+  repeated bytes key_ids = 3;
 }
