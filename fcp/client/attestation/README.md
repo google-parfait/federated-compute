@@ -1,8 +1,8 @@
 # Remote attestation verification
 
 The code in this directory (`attestation_transparency_verifier.cc`) performs
-remote attestation verification of TEE-hosted ledger applications which form
-part of the
+remote attestation transparency verification of TEE-hosted KMS applications
+which form part of the
 [`ConfidentialAggregations`](/fcp/protos/federatedcompute/confidential_aggregations.proto)
 protocol, as described in the
 [Confidential Federated Computations paper](https://arxiv.org/abs/2404.10764)
@@ -10,28 +10,33 @@ and this
 [Google Research blog post](https://research.google/blog/discovering-new-words-with-confidential-federated-analytics/).
 
 Client devices that use this library to participate in the
-`ConfidentialAggregations` protocol will verify attestation evidence for the
-ledger application hosted in the
-[Confidential Federated Compute](https://github.com/google-parfait/confidential-federated-compute)
-repository. They will also verify the data access policy that the ledger will
-enforce, which will specify one or more allowed data transformation applications
-which are built from that same repository.
+`ConfidentialAggregations` protocol perform attestation transparency
+verification for the KMS application hosted in
+[Confidential Federated Compute](https://github.com/google-parfait/confidential-federated-compute).
+They will also verify the transparency of the data access policy that the KMS
+will enforce, which will specify one or more allowed data transformation
+applications. Specifically, "transparency verification" means that the verifier
+ensure that the KMS attestation evidence and the access policy have been
+published to a transparency log ("endorsed") for external inspection.
 
 After a successful verification, these devices will log an
 [attestation verification record](/fcp/protos/confidentialcompute/verification_record.proto)
-which can then be inspected. The inspection process is described in more detail
-in
+containing the key pieces of attestation transparency evidence (`encryption_key`
+and `pipeline_configuration`) that were verified. This allows observers of the
+log stream to inspect the record, replay verification against transparency logs,
+and look up the TEE-attested binaries permitted to process the device's uploaded
+data. The inspection process is described in more detail in
 https://github.com/google-parfait/confidential-federated-compute/blob/main/docs/README.md
 
-**Note:** There is an alternate approach to inspect the ledger and access
-policies that a device may accept, which is not based on inspecting attestation
-verification records and is instead based on monitoring the
-[Rekor](https://docs.sigstore.dev/logging/overview/) transparency log for ledger
-and data access policy endorsements. This approach does make use of the
+**Note:** There is an alternate approach to inspect the KMS attestation evidence
+and access policies that a device may accept, which is not based on inspecting
+these attestation verification records and is instead based on monitoring the
+[Rekor](https://docs.sigstore.dev/logging/overview/) transparency log for KMS
+and data access policy endorsements. This approach does not make use of the
 instructions below, and has the benefits that it does not require instrumenting
 a device using the steps below, and that it makes it possible to inspect all
-possible ledger & access policies a device may accept, not just the ones a
-device happens to be served at a given point in time. See
+possible KMS & access policies a device may accept, not just the ones a device
+happens to be served at a given point in time. See
 https://github.com/google-parfait/confidential-federated-compute/blob/main/docs/README.md
 for a more detailed comparison of both of these approaches.
 

@@ -98,17 +98,11 @@ cc_library(
     deps = [
         "//fcp/base",
         "//fcp/base:compression",
-        "//fcp/protos/confidentialcompute:access_policy_cc_proto",
         "//fcp/protos/confidentialcompute:verification_record_cc_proto",
-        "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
-        "@oak//proto/attestation:endorsement_cc_proto",
-        "@oak//proto/attestation:evidence_cc_proto",
-        "@oak//proto/attestation:reference_value_cc_proto",
-        "@oak//proto/attestation:verification_cc_proto",
     ],
 )
 
@@ -119,7 +113,7 @@ cc_test(
         ":log_attestation_records",
         ":test_values",
         "//fcp/base:compression",
-        "//fcp/protos/confidentialcompute:access_policy_cc_proto",
+        "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
         "//fcp/protos/confidentialcompute:verification_record_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "//fcp/testing",
@@ -128,8 +122,6 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_googletest//:gtest_main",
-        "@oak//proto/attestation:endorsement_cc_proto",
-        "@oak//proto/attestation:evidence_cc_proto",
     ],
 )
 
@@ -156,7 +148,7 @@ cc_test(
         ":extract_attestation_records_lib",
         ":log_attestation_records",
         ":test_values",
-        "//fcp/protos/confidentialcompute:access_policy_cc_proto",
+        "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
         "//fcp/protos/confidentialcompute:verification_record_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "//fcp/testing",
@@ -164,8 +156,6 @@ cc_test(
         "@com_google_absl//absl/log:log_sink",
         "@com_google_absl//absl/log:log_sink_registry",
         "@com_google_googletest//:gtest_main",
-        "@oak//proto/attestation:endorsement_cc_proto",
-        "@oak//proto/attestation:evidence_cc_proto",
     ],
 )
 
@@ -191,6 +181,7 @@ cc_library(
     srcs = ["test_values.cc"],
     hdrs = ["test_values.h"],
     deps = [
+        "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
         "//fcp/protos/federatedcompute:confidential_encryption_config_cc_proto",
         "//fcp/testing",
         "@oak//proto/attestation:reference_value_cc_proto",

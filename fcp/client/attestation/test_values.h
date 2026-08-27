@@ -21,6 +21,7 @@
 #ifndef FCP_CLIENT_ATTESTATION_TEST_VALUES_H_
 #define FCP_CLIENT_ATTESTATION_TEST_VALUES_H_
 
+#include "fcp/protos/confidentialcompute/payload_transparency.pb.h"
 #include "fcp/protos/federatedcompute/confidential_encryption_config.pb.h"
 #include "proto/attestation/reference_value.pb.h"
 
@@ -29,6 +30,9 @@ namespace fcp::client::attestation::test_values {
 // Returns a config that is known to be rooted in a hardware root of trust.
 google::internal::federatedcompute::v1::ConfidentialEncryptionConfig
 GetKnownValidEncryptionConfig();
+
+// Returns a signed pipeline configuration endorsement.
+fcp::confidentialcompute::SignedPayload GetKnownValidSignedEndorsements();
 
 // Returns reference values which should successfully verify the above
 // encryption config.

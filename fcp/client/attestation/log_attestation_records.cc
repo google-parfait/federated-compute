@@ -27,13 +27,7 @@
 #include "absl/strings/string_view.h"
 #include "fcp/base/compression.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/protos/confidentialcompute/access_policy.pb.h"
 #include "fcp/protos/confidentialcompute/verification_record.pb.h"
-#include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
-#include "proto/attestation/endorsement.pb.h"
-#include "proto/attestation/evidence.pb.h"
-#include "proto/attestation/reference_value.pb.h"
-#include "proto/attestation/verification.pb.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -106,9 +100,9 @@ void LogSerializedVerificationRecordWith(
       CompressWithGzip(record.SerializeAsString());
   // If we fail to compress the record then something must've gone horribly
   // wrong, and we should just bail.
-  FCP_CHECK_STATUS(compressed_record.status());
+  FCP_CHECK(compressed_record.ok()) << compressed_record.status();
   // We base64-encode the record to ensure it's easily printable.
-  std::string encoded_record = absl::Base64Escape(*compressed_record);
+  std::string encoded_record = absl::Base64Escape(compressed_record.value());
 
   logger(kVerificationRecordLogInfoMessage, /*enclose_with_brackets=*/false);
   for (absl::string_view chunk :

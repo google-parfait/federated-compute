@@ -27,7 +27,9 @@ message SignedEndorsements {
   // A client must validate each SignedEndorsement with a corresponding
   // EndorsementReferenceValue before allowing the client-held data to be
   // uploaded.
-  repeated oak.attestation.v1.SignedEndorsement signed_endorsement = 1;
+  // DEPRECATED: Clients now use the `pipeline_configuration` field.
+  repeated oak.attestation.v1.SignedEndorsement signed_endorsement = 1
+      [deprecated = true];
 
   // A signed endorsement for the configuration of pipelines that are permitted
   // to process uploaded data. The payload will be a serialized
@@ -35,7 +37,7 @@ message SignedEndorsements {
   // should verify that the signatures and transparency log entries meet the
   // client's transparency requirements.
   //
-  // This field will eventually replace `signed_endorsement` and
+  // This field replaced `signed_endorsement` and
   // `google.internal.federatedcompute.v1.TaskAssignment.ConfidentialAggregationInfo.data_access_policy`.
   SignedPayload pipeline_configuration = 2;
 

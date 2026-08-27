@@ -232,7 +232,7 @@ message TaskAssignment {
   message ConfidentialAggregationInfo {
     // The `fcp.confidentialcompute.DataAccessPolicy` that will apply to client
     // contributions.
-    Resource data_access_policy = 1;
+    Resource data_access_policy = 1 [deprecated = true];
 
     // the serialized fcp.confidentialcompute.SignedEndorsements that authorize
     // the `data_access_policy`.  The client will verify that these

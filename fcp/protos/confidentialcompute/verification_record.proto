@@ -16,10 +16,7 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
-import "fcp/protos/confidentialcompute/access_policy.proto";
 import "fcp/protos/confidentialcompute/payload_transparency.proto";
-import "proto/attestation/endorsement.proto";
-import "proto/attestation/evidence.proto";
 
 option java_multiple_files = true;
 
@@ -27,22 +24,7 @@ option java_multiple_files = true;
 // `AttestationVerifier` implementation during the course of a
 // `ConfidentialAggregations` session, and which the verifier deemed valid.
 message AttestationVerificationRecord {
-  // The attestation evidence that was verified. This corresponds to the
-  // server-provided `ConfidentialEncryptionConfig.attestation_evidence` field
-  // in the `ConfidentialAggregations` protocol.
-  oak.attestation.v1.Evidence attestation_evidence = 1;
-
-  // The attestation endorsements that were passed to the verifier. This
-  // corresponds to the server-provided
-  // `ConfidentialEncryptionConfig.attestation_endorsements` field in the
-  // `ConfidentialAggregations` protocol.
-  oak.attestation.v1.Endorsements attestation_endorsements = 2;
-
-  // The data access policy that was verified. This corresponds to the
-  // server-provided
-  // `TaskAssignment.ConfidentialAggregationInfo.data_access_policy` field in
-  // the `TaskAssignments` protocol.
-  DataAccessPolicy data_access_policy = 3;
+  reserved 1, 2, 3;
 
   // The upload encryption key that was verified. This corresponds to the
   // server-provided `ConfidentialEncryptionConfig.encryption_key` field in the

@@ -54,10 +54,7 @@ proto_library(
     name = "verification_record_proto",
     srcs = ["verification_record.proto"],
     deps = [
-        ":access_policy_proto",
         ":payload_transparency_proto",
-        "@oak//proto/attestation:endorsement_proto",
-        "@oak//proto/attestation:evidence_proto",
     ],
 )
 

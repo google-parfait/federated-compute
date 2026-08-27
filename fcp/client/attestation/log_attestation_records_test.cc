@@ -13,12 +13,10 @@
 #include "absl/strings/string_view.h"
 #include "fcp/base/compression.h"
 #include "fcp/client/attestation/test_values.h"
-#include "fcp/protos/confidentialcompute/access_policy.pb.h"
+#include "fcp/protos/confidentialcompute/payload_transparency.pb.h"
 #include "fcp/protos/confidentialcompute/verification_record.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "fcp/testing/testing.h"
-#include "proto/attestation/endorsement.pb.h"
-#include "proto/attestation/evidence.pb.h"
 
 namespace fcp::client::attestation {
 namespace {
@@ -41,14 +39,13 @@ TEST(LogSerializedVerificationRecordTest,
   // Create a verification record with a good amount of data in it.
   confidentialcompute::AttestationVerificationRecord record;
   auto encryption_config = GetKnownValidEncryptionConfig();
-  *record.mutable_attestation_evidence() =
-      encryption_config.attestation_evidence();
-  *record.mutable_attestation_endorsements() =
-      encryption_config.attestation_endorsements();
-  *record.mutable_data_access_policy()
-       ->add_transforms()
-       ->mutable_application()
-       ->mutable_tag() = "some tag";
+  *record.mutable_encryption_key() = encryption_config.encryption_key();
+  std::string huge_string;
+  for (int i = 0; i < 8000; ++i) {
+    huge_string += std::to_string((i * 17) % 256);
+    huge_string += "some extra padding";
+  }
+  record.mutable_pipeline_configuration()->set_payload(huge_string);
 
   // Call the LogSerializedVerificationRecord function (or rather, the internal
   // variant which allows us to inspect each of the chunks it would log), which
