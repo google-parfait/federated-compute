@@ -176,6 +176,8 @@ enum GemmaModel {
   GEMMA3_1B = 6;
   GEMMA3_4B = 7;
   GEMMA3_12B = 8;
+  GEMMA4_E2B = 9;
+  GEMMA4_E4B = 10;
 }
 
 // An enum of Gemma model training types supported for inference in TEE. Details
