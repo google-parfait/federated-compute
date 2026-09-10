@@ -28,6 +28,7 @@
 #include <filesystem>  // NOLINT(build/c++17)
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -37,6 +38,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "fcp/client/attestation/attestation_transparency_verifier.h"
+#include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/client_runner_example_data.pb.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -50,6 +53,7 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
+#include "fcp/protos/confidentialcompute/access_policy_endorsement_options.pb.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp::client {
@@ -60,17 +64,23 @@ class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
  public:
   // Constructs a SimpleTaskEnvironment that will return an example iterator
   // with `num_empty_examples` empty examples.
-  explicit FederatedTaskEnvDepsImpl(int num_empty_examples,
-                                    std::string test_cert_path = "")
+  explicit FederatedTaskEnvDepsImpl(
+      int num_empty_examples, std::string test_cert_path = "",
+      std::optional<fcp::confidentialcompute::AccessPolicyEndorsementOptions>
+          endorsement_options = std::nullopt)
       : examples_(num_empty_examples),
-        test_cert_path_(std::move(test_cert_path)) {}
+        test_cert_path_(std::move(test_cert_path)),
+        endorsement_options_(std::move(endorsement_options)) {}
 
   // Constructs a SimpleTaskEnvironment that will return an example iterator
   // with examples determined by the collection URI.
-  explicit FederatedTaskEnvDepsImpl(ClientRunnerExampleData example_data,
-                                    std::string test_cert_path = "")
+  explicit FederatedTaskEnvDepsImpl(
+      ClientRunnerExampleData example_data, std::string test_cert_path = "",
+      std::optional<fcp::confidentialcompute::AccessPolicyEndorsementOptions>
+          endorsement_options = std::nullopt)
       : examples_(std::move(example_data)),
-        test_cert_path_(std::move(test_cert_path)) {}
+        test_cert_path_(std::move(test_cert_path)),
+        endorsement_options_(std::move(endorsement_options)) {}
 
   std::string GetBaseDir() override {
     return std::filesystem::path(testing::TempDir());
@@ -112,6 +122,19 @@ class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
         &curl_api_, test_cert_path_);
   }
 
+  std::unique_ptr<fcp::client::attestation::AttestationVerifier>
+  CreateAttestationVerifier() override {
+    if (endorsement_options_.has_value()) {
+      return std::make_unique<
+          fcp::client::attestation::AttestationTransparencyVerifier>(
+          *endorsement_options_,
+          [](const fcp::confidentialcompute::AttestationVerificationRecord&) {
+          });
+    }
+    return std::make_unique<
+        fcp::client::attestation::AlwaysFailingAttestationVerifier>();
+  }
+
  private:
   class FakeExampleIterator : public ExampleIterator {
    public:
@@ -144,6 +167,8 @@ class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
 
   const std::variant<int, ClientRunnerExampleData> examples_;
   const std::string test_cert_path_;
+  const std::optional<fcp::confidentialcompute::AccessPolicyEndorsementOptions>
+      endorsement_options_;
   fcp::client::http::curl::CurlApi curl_api_;
 };
 
@@ -212,6 +237,13 @@ class FlagsImpl : public Flags {
     return 2000;
   }
   bool log_tensorflow_error_messages() const override { return true; }
+  bool enable_confidential_aggregation() const override { return true; }
+  bool enable_private_logger() const override { return true; }
+  bool enable_blob_header_in_http_headers() const override { return false; }
+  bool drop_out_based_data_availability() const override { return true; }
+  bool enable_lightweight_client_report_wire_format() const override {
+    return true;
+  }
 };
 
 }  // namespace fcp::client

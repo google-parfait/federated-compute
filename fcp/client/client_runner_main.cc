@@ -15,6 +15,7 @@
  */
 
 #include <fstream>
+#include <ios>
 #include <optional>
 #include <string>
 #include <utility>
@@ -31,6 +32,7 @@
 #include "fcp/client/client_runner_example_data.pb.h"
 #include "fcp/client/fake_event_publisher.h"
 #include "fcp/client/fl_runner.h"
+#include "fcp/protos/confidentialcompute/access_policy_endorsement_options.pb.h"
 
 ABSL_FLAG(std::string, server, "",
           "Federated Server URI (supports https:// URIs");
@@ -51,6 +53,8 @@ ABSL_FLAG(int, num_empty_examples, 0,
 ABSL_FLAG(int, num_rounds, 1, "Number of rounds to train");
 ABSL_FLAG(int, sleep_after_round_secs, 3,
           "Number of seconds to sleep after each round.");
+ABSL_FLAG(std::string, endorsement_options_path, "",
+          "Path to a serialized AccessPolicyEndorsementOptions proto file.");
 
 static constexpr char kUsageString[] =
     "Stand-alone Federated Client Executable.\n\n"
@@ -85,6 +89,21 @@ int main(int argc, char** argv) {
   FCP_LOG(INFO) << " - population:     " << population;
   FCP_LOG(INFO) << " - client_version: " << client_version;
 
+  std::optional<fcp::confidentialcompute::AccessPolicyEndorsementOptions>
+      endorsement_options;
+  if (std::string endorsement_options_path =
+          absl::GetFlag(FLAGS_endorsement_options_path);
+      !endorsement_options_path.empty()) {
+    std::ifstream file(endorsement_options_path, std::ios::binary);
+    fcp::confidentialcompute::AccessPolicyEndorsementOptions options;
+    if (!options.ParseFromIstream(&file)) {
+      FCP_LOG(ERROR) << "Failed to parse AccessPolicyEndorsementOptions from "
+                     << endorsement_options_path;
+      return 1;
+    }
+    endorsement_options = std::move(options);
+  }
+
   std::optional<fcp::client::ClientRunnerExampleData> example_data;
   if (std::string path = absl::GetFlag(FLAGS_example_data_path);
       !path.empty()) {
@@ -99,10 +118,11 @@ int main(int argc, char** argv) {
   bool success = false;
   for (auto i = 0; i < num_rounds || num_rounds < 0; ++i) {
     fcp::client::FederatedTaskEnvDepsImpl federated_task_env_deps_impl =
-        example_data
-            ? fcp::client::FederatedTaskEnvDepsImpl(*example_data, test_cert)
-            : fcp::client::FederatedTaskEnvDepsImpl(
-                  absl::GetFlag(FLAGS_num_empty_examples), test_cert);
+        example_data ? fcp::client::FederatedTaskEnvDepsImpl(
+                           *example_data, test_cert, endorsement_options)
+                     : fcp::client::FederatedTaskEnvDepsImpl(
+                           absl::GetFlag(FLAGS_num_empty_examples), test_cert,
+                           endorsement_options);
     fcp::client::FakeEventPublisher event_publisher(/*quiet=*/false);
     fcp::client::FilesImpl files_impl;
     fcp::client::LogManagerImpl log_manager_impl;
@@ -114,9 +134,12 @@ int main(int argc, char** argv) {
         test_cert, session, population, absl::GetFlag(FLAGS_retry_token),
         client_version, absl::GetFlag(FLAGS_client_attestation_measurement));
     if (fl_runner_result.ok()) {
-      FCP_LOG(INFO) << "Run finished successfully; result: "
+      FCP_LOG(INFO) << "Run finished; result: "
                     << fl_runner_result.value().DebugString();
-      success = true;
+      if (fl_runner_result->contribution_result() ==
+          fcp::client::FLRunnerResult::SUCCESS) {
+        success = true;
+      }
     } else {
       FCP_LOG(ERROR) << "Error during run: " << fl_runner_result.status();
     }
