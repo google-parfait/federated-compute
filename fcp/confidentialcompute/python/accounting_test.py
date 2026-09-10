@@ -1,3 +1,5 @@
+import math
+
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
@@ -162,6 +164,161 @@ class AccountingTest(parameterized.TestCase):
           coefficients=np.array([[1.0], [2.0]]),
           min_separation=1,
           max_participations=1,
+      )
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='spec_example',
+          gradient_noise_multiplier=1.0,
+          clipping_noise_multiplier=10.0,
+          expected=math.sqrt(1 / 1.01),
+      ),
+      dict(
+          testcase_name='equal',
+          gradient_noise_multiplier=2.0,
+          clipping_noise_multiplier=2.0,
+          expected=math.sqrt(2),
+      ),
+      dict(
+          testcase_name='gradient_inf',
+          gradient_noise_multiplier=math.inf,
+          clipping_noise_multiplier=5.0,
+          expected=5.0,
+      ),
+      dict(
+          testcase_name='clipping_inf',
+          gradient_noise_multiplier=3.0,
+          clipping_noise_multiplier=math.inf,
+          expected=3.0,
+      ),
+  )
+  def test_combine_noise_multipliers(
+      self, gradient_noise_multiplier, clipping_noise_multiplier, expected
+  ):
+    combined = accounting._combine_noise_multipliers(
+        gradient_noise_multiplier=gradient_noise_multiplier,
+        clipping_noise_multiplier=clipping_noise_multiplier,
+    )
+    self.assertAlmostEqual(combined, expected)
+
+  @parameterized.parameters(
+      dict(gradient_noise_multiplier=0.0, clipping_noise_multiplier=1.0),
+      dict(gradient_noise_multiplier=1.0, clipping_noise_multiplier=0.0),
+      dict(gradient_noise_multiplier=-1.0, clipping_noise_multiplier=1.0),
+      dict(gradient_noise_multiplier=1.0, clipping_noise_multiplier=-1.0),
+  )
+  def test_combine_noise_multipliers_invalid_inputs(self, **kwargs):
+    with self.assertRaisesRegex(ValueError, 'must be positive'):
+      accounting._combine_noise_multipliers(**kwargs)
+
+  @parameterized.named_parameters(
+      ('with_max_participations', 2),
+      ('no_max_participations', None),
+  )
+  def test_zcdp_for_blt_with_adaptive_clipping(self, max_participations):
+    blt = buffered_toeplitz.BufferedToeplitz.build(
+        buf_decay=[
+            0.9999999999921251,
+            0.9944453083640997,
+            0.8985923474607591,
+            0.4912001418098778,
+        ],
+        output_scale=[
+            0.0070314825502323835,
+            0.10613806907600574,
+            0.1898159060327625,
+            0.1966594748073734,
+        ],
+    )
+    # Use sigma_g=1.0, sigma_c=10.0 -> combined ~0.9950
+    zcdp = accounting.zcdp_for_blt_with_adaptive_clipping(
+        blt,
+        total_steps=100,
+        gradient_noise_multiplier=1.0,
+        clipping_noise_multiplier=10.0,
+        min_separation=50,
+        max_participations=max_participations,
+    )
+    # Compare against direct call with combined noise multiplier.
+    combined_nm = accounting._combine_noise_multipliers(1.0, 10.0)
+    expected_zcdp = accounting.zcdp_for_blt(
+        blt,
+        total_steps=100,
+        noise_multiplier=combined_nm,
+        min_separation=50,
+        max_participations=max_participations,
+    )
+    self.assertAlmostEqual(zcdp, expected_zcdp)
+    # zCDP with adaptive clipping should be higher (worse) than without,
+    # since the combined noise multiplier is smaller.
+    zcdp_without_clipping = accounting.zcdp_for_blt(
+        blt,
+        total_steps=100,
+        noise_multiplier=1.0,
+        min_separation=50,
+        max_participations=max_participations,
+    )
+    self.assertGreater(zcdp, zcdp_without_clipping)
+
+  @parameterized.named_parameters(
+      ('with_max_participations', 2),
+      ('no_max_participations', None),
+  )
+  def test_noise_multiplier_for_blt_with_adaptive_clipping(
+      self, max_participations
+  ):
+    blt = buffered_toeplitz.BufferedToeplitz.build(
+        buf_decay=[
+            0.9999999999921251,
+            0.9944453083640997,
+            0.8985923474607591,
+            0.4912001418098778,
+        ],
+        output_scale=[
+            0.0070314825502323835,
+            0.10613806907600574,
+            0.1898159060327625,
+            0.1966594748073734,
+        ],
+    )
+    # First compute a zCDP using known sigma_g=1.0, sigma_c=10.0.
+    target_zcdp = accounting.zcdp_for_blt_with_adaptive_clipping(
+        blt,
+        total_steps=100,
+        gradient_noise_multiplier=1.0,
+        clipping_noise_multiplier=10.0,
+        min_separation=50,
+        max_participations=max_participations,
+    )
+    # Then recover sigma_g.
+    recovered_sigma_g = (
+        accounting.noise_multiplier_for_blt_with_adaptive_clipping(
+            blt,
+            total_steps=100,
+            target_zcdp=target_zcdp,
+            clipping_noise_multiplier=10.0,
+            min_separation=50,
+            max_participations=max_participations,
+        )
+    )
+    self.assertAlmostEqual(recovered_sigma_g, 1.0, places=6)
+
+  def test_noise_multiplier_for_blt_with_adaptive_clipping_sigma_c_too_small(
+      self,
+  ):
+    blt = buffered_toeplitz.BufferedToeplitz.build(
+        buf_decay=[1.0],
+        output_scale=[1.0],
+    )
+    # Use a very tight target_zcdp that requires a large combined nm,
+    # which will exceed sigma_c.
+    with self.assertRaisesRegex(ValueError, 'Cannot achieve target_zcdp'):
+      accounting.noise_multiplier_for_blt_with_adaptive_clipping(
+          blt,
+          total_steps=100,
+          target_zcdp=0.001,
+          clipping_noise_multiplier=0.1,
+          min_separation=50,
       )
 
 

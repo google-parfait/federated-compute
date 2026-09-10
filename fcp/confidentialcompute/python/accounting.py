@@ -189,3 +189,140 @@ def noise_multiplier_for_blt(
   # zCDP is proportional to 1 / noise_multiplier**2, i.e. noise_multiplier is
   # proportional to 1 / sqrt(zCDP).
   return math.sqrt(zcdp_at_noise_1 / target_zcdp)
+
+
+def _combine_noise_multipliers(
+    gradient_noise_multiplier: float,
+    clipping_noise_multiplier: float,
+) -> float:
+  """Computes the combined noise multiplier from gradient and clipping noise.
+
+  When using adaptive clipping with a Gaussian mechanism, both the gradient
+  noise (sigma_g) and the clipping noise (sigma_c) contribute to the overall
+  privacy cost. The combined noise multiplier is:
+
+    sigma = sqrt(1 / (1 / sigma_g^2 + 1 / sigma_c^2))
+
+  This combined value should be used as the noise_multiplier argument to
+  `zcdp_for_blt`.
+
+  Args:
+    gradient_noise_multiplier: The noise multiplier used for gradients
+      (sigma_g).
+    clipping_noise_multiplier: The noise multiplier used for adaptive clipping
+      (sigma_c).
+
+  Returns:
+    The combined noise multiplier.
+
+  Raises:
+    ValueError: If either noise multiplier is not positive.
+  """
+  if gradient_noise_multiplier <= 0:
+    raise ValueError('gradient_noise_multiplier must be positive.')
+  if clipping_noise_multiplier <= 0:
+    raise ValueError('clipping_noise_multiplier must be positive.')
+  return math.sqrt(
+      1.0
+      / (
+          1.0 / gradient_noise_multiplier**2
+          + 1.0 / clipping_noise_multiplier**2
+      )
+  )
+
+
+def zcdp_for_blt_with_adaptive_clipping(
+    matrix: buffered_toeplitz.BufferedToeplitz,
+    total_steps: int,
+    gradient_noise_multiplier: float,
+    clipping_noise_multiplier: float,
+    min_separation: int,
+    max_participations: int | None = None,
+) -> float:
+  """Computes the zCDP for BLT with adaptive clipping.
+
+  When adaptive clipping is used, both the gradient mechanism (sigma_g) and the
+  clipping mechanism (sigma_c) contribute to the privacy cost. This function
+  computes the combined noise multiplier and delegates to `zcdp_for_blt`.
+
+  Args:
+    matrix: The BLT matrix.
+    total_steps: The total number of steps in training.
+    gradient_noise_multiplier: The noise multiplier used for gradients
+      (sigma_g).
+    clipping_noise_multiplier: The noise multiplier used for the adaptive
+      clipping Gaussian mechanism (sigma_c). A recommended choice is
+      `clients_per_round / 20`.
+    min_separation: The minimum separation between participations.
+    max_participations: The maximum number of participations allowed. If None,
+      the maximum number of participations will be determined by the minimum
+      separation and total steps.
+
+  Returns:
+    The zCDP parameter for DP-FTRL using BLT with adaptive clipping.
+  """
+  combined_nm = _combine_noise_multipliers(
+      gradient_noise_multiplier, clipping_noise_multiplier
+  )
+  return zcdp_for_blt(
+      matrix=matrix,
+      total_steps=total_steps,
+      noise_multiplier=combined_nm,
+      min_separation=min_separation,
+      max_participations=max_participations,
+  )
+
+
+def noise_multiplier_for_blt_with_adaptive_clipping(
+    matrix: buffered_toeplitz.BufferedToeplitz,
+    total_steps: int,
+    target_zcdp: float,
+    clipping_noise_multiplier: float,
+    min_separation: int,
+    max_participations: int | None = None,
+) -> float:
+  """Computes noise multipliers for BLT with adaptive clipping to satisfy zCDP.
+
+  Given a target zCDP and a clipping noise multiplier (sigma_c), this function
+  computes the combined noise multiplier needed to achieve the target zCDP,
+  then derives the gradient noise multiplier (sigma_g).
+
+  A recommended choice for sigma_c is `clients_per_round / 20`.
+
+  Args:
+    matrix: The BLT matrix.
+    total_steps: The total number of steps in training.
+    target_zcdp: The target zCDP parameter.
+    clipping_noise_multiplier: The noise multiplier for the adaptive clipping
+      Gaussian mechanism (sigma_c).
+    min_separation: The minimum separation between participations.
+    max_participations: The maximum number of participations allowed. If None,
+      the maximum number of participations will be determined by the minimum
+      separation and total steps.
+
+  Returns:
+    The gradient noise multiplier (sigma_g) that, when combined with
+    clipping_noise_multiplier, achieves the target zCDP.
+
+  Raises:
+    ValueError: If the required combined noise multiplier is >= sigma_c, making
+      it impossible to separate the gradient noise multiplier.
+  """
+  combined_nm = noise_multiplier_for_blt(
+      matrix=matrix,
+      total_steps=total_steps,
+      target_zcdp=target_zcdp,
+      min_separation=min_separation,
+      max_participations=max_participations,
+  )
+  if clipping_noise_multiplier <= combined_nm:
+    raise ValueError(
+        f'Cannot achieve target_zcdp={target_zcdp} with'
+        f' clipping_noise_multiplier={clipping_noise_multiplier}. The required'
+        f' combined noise multiplier is {combined_nm}, which must be strictly'
+        ' less than clipping_noise_multiplier. Either increase'
+        ' clipping_noise_multiplier or relax target_zcdp.'
+    )
+  return math.sqrt(
+      1.0 / (1.0 / combined_nm**2 - 1.0 / clipping_noise_multiplier**2)
+  )
