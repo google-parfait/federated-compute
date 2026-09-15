@@ -205,7 +205,7 @@ class SecAggVector {
   // A version without expensive branches or multiplies.
   void PackUint64IntoByteStringBranchless(absl::Span<const uint64_t> span);
 
-  static ABSL_MUST_USE_RESULT uint64_t UnpackUint64FromByteStringAt(
+  [[nodiscard]] static uint64_t UnpackUint64FromByteStringAt(
       int index, int bit_width, const std::string& byte_string);
   // A version without expensive branches or multiplies.
   void UnpackByteStringToUint64VectorBranchless(
