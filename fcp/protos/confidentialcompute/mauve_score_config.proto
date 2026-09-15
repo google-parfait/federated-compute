@@ -81,4 +81,8 @@ message MauveScoreResult {
 message MauveScoreContainerConfigConstraints {
   // Defines limits on the accesses to blobs.
   AccessBudget access_budget = 1;
+
+  // The minimum size of the aggregation window in minutes (for time-based
+  // budget tracking).
+  uint64 min_agg_window_minutes = 2;
 }
