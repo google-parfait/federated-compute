@@ -475,6 +475,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   std::unique_ptr<ProtocolRequestCreator> task_assignment_request_creator_;
   std::unique_ptr<WallClockStopwatch> network_stopwatch_ =
       WallClockStopwatch::Create();
+  absl::BitGen bit_gen_;
   ProtocolRequestHelper protocol_request_helper_;
   const std::string api_key_;
   const std::string population_name_;
@@ -485,7 +486,6 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   const std::string client_attestation_measurement_;
   std::string most_recent_forwarding_prefix_;
   std::function<bool()> should_abort_;
-  absl::BitGen bit_gen_;
   const InterruptibleRunner::TimingConfig timing_config_;
   // The graceful waiting period for cancellation requests before checking
   // whether the client should be interrupted.

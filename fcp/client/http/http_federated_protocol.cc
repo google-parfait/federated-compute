@@ -432,9 +432,10 @@ HttpFederatedProtocol::HttpFederatedProtocol(
           std::make_unique<ProtocolRequestCreator>(
               entry_point_uri, api_key, HeaderList{},
               !flags->disable_http_request_body_compression())),
+      bit_gen_(std::move(bit_gen)),
       protocol_request_helper_(
           http_client, &bytes_downloaded_, &bytes_uploaded_,
-          network_stopwatch_.get(), clock, &bit_gen,
+          network_stopwatch_.get(), clock, &bit_gen_,
           flags->http_retry_max_attempts(), flags->http_retry_delay_ms()),
       api_key_(api_key),
       population_name_(population_name),
@@ -443,7 +444,6 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       client_attestation_measurement_(client_attestation_measurement),
       most_recent_forwarding_prefix_(entry_point_uri),
       should_abort_(std::move(should_abort)),
-      bit_gen_(std::move(bit_gen)),
       timing_config_(timing_config),
       waiting_period_for_cancellation_(
           absl::Seconds(flags->waiting_period_sec_for_cancellation())) {
