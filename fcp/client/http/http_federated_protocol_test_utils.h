@@ -46,7 +46,6 @@
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/client/willow/willow_payload_encryptor.h"
-#include "fcp/confidentialcompute/cose.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -73,7 +72,6 @@ using ::fcp::client::http::MockHttpClient;
 using ::fcp::client::http::SimpleHttpRequestMatcher;
 using ::fcp::client::willow::TestingFakeWillowPayloadEncryptor;
 using ::fcp::client::willow::WillowPayloadEncryptor;
-using ::fcp::confidential_compute::OkpCwt;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::ByteStreamResource;
 using ::google::internal::federatedcompute::v1::ClientStats;

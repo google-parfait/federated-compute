@@ -29,7 +29,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#ifdef FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
+#ifdef FCP_SUPPORT_CBOR
 #include "libcppbor/include/cppbor/cppbor.h"
 #include "libcppbor/include/cppbor/cppbor_parse.h"
 #endif
@@ -37,7 +37,7 @@
 namespace fcp::confidential_compute {
 // TODO: b/361182982 - Clean up the ifdef once the iOS toolchain supports C++20,
 // or a better solution towards C++20 compatibility is found.
-#ifdef FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
+#ifdef FCP_SUPPORT_CBOR
 namespace {
 
 using ::cppbor::Array;
@@ -986,13 +986,23 @@ absl::StatusOr<std::string> ReleaseToken::Encode() const {
   return array.toString();
 }
 
-#else  // defined(FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG)
+#else  // defined(FCP_SUPPORT_CBOR)
 absl::StatusOr<OkpKey> OkpKey::Decode(absl::string_view encoded) {
   return absl::UnimplementedError(
       "Confidential Aggregation is not supported on this platform.");
 }
 
 absl::StatusOr<std::string> OkpKey::Encode() const {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<Ec2Key> Ec2Key::Decode(absl::string_view encoded) {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> Ec2Key::Encode() const {
   return absl::UnimplementedError(
       "Confidential Aggregation is not supported on this platform.");
 }
@@ -1065,7 +1075,7 @@ absl::StatusOr<std::string> ReleaseToken::Encode() const {
       "Confidential Aggregation is not supported on this platform.");
 }
 
-#endif  // defined(FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG)
+#endif  // defined(FCP_SUPPORT_CBOR)
 
 template struct cose_internal::BaseCwt<OkpKey>;
 template struct cose_internal::BaseCwt<Ec2Key>;
@@ -1102,33 +1112,7 @@ static absl::Status EncodeInt(int64_t value, std::string& output) {
 
 // SymmetricKey encoding is hand-implemented to allow MessageEncryptor to
 // function without a dependency on CBOR. See RFC 8949 for the encoding format.
-absl::StatusOr<std::string> SymmetricKey::Encode(
-    bool encode_without_libcppbor) const {
-  if (!encode_without_libcppbor) {
-#ifdef FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
-    // Generate a map containing the parameters that are set.
-    Map map;
-    map.add(CoseKeyParameter::kKty, CoseKeyType::kSymmetric);
-    if (algorithm) {
-      map.add(CoseKeyParameter::kAlg, *algorithm);
-    }
-    if (!key_ops.empty()) {
-      Array array;
-      for (int64_t key_op : key_ops) {
-        array.add(key_op);
-      }
-      map.add(CoseKeyParameter::kKeyOps, std::move(array));
-    }
-    if (!k.empty()) {
-      map.add(CoseKeyParameter::kSymmetricK, Bstr(k));
-    }
-    return map.toString();
-#else   // FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
-    return absl::UnimplementedError(
-        "Confidential Aggregation is not supported on this platform.");
-#endif  // FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
-  }
-
+absl::StatusOr<std::string> SymmetricKey::Encode() const {
   std::string output;
   output.reserve(30);  // Expected size with one key_op and a 128-bit key.
   int num_entries = 1 + algorithm.has_value() + !key_ops.empty() + !k.empty();

@@ -79,12 +79,7 @@ struct SymmetricKey {
   static absl::StatusOr<SymmetricKey> Decode(absl::string_view encoded);
 
   // CBOR-encodes a SymmetricKey.
-  //
-  // If `encode_without_libcppbor` is true, the key will be encoded without
-  // using libcppbor, which is useful when FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
-  // is not defined.
-  absl::StatusOr<std::string> Encode(
-      bool encode_without_libcppbor = false) const;
+  absl::StatusOr<std::string> Encode() const;
 };
 
 namespace cose_internal {

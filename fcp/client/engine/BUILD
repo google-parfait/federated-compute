@@ -37,7 +37,6 @@ cc_library(
         "privacy_id_utils.h",
     ],
     copts = FCP_COPTS,
-    visibility = default_visibility,
     deps = [
         "//fcp/base:digest",
         "//fcp/client:event_time_range_cc_proto",
@@ -64,7 +63,6 @@ cc_test(
         "privacy_id_utils_test.cc",
     ],
     copts = FCP_COPTS,
-    visibility = default_visibility,
     deps = [
         ":privacy_id_utils",
         "//fcp/client:event_time_range_cc_proto",
@@ -94,7 +92,6 @@ cc_library(
         "example_query_plan_engine.h",
     ],
     copts = FCP_COPTS,
-    visibility = default_visibility,
     deps = [
         ":common",
         ":example_iterator_factory",
@@ -199,7 +196,6 @@ cc_library(
     name = "example_iterator_factory",
     hdrs = ["example_iterator_factory.h"],
     copts = FCP_COPTS,
-    visibility = default_visibility,
     deps = [
         "//fcp/client:selector_context_cc_proto",
         "//fcp/client:simple_task_environment",

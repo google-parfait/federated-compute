@@ -48,6 +48,7 @@ using ::testing::IsEmpty;
 using ::testing::Not;
 using ::testing::Optional;
 
+#ifdef FCP_SUPPORT_CBOR
 // Helper function to generate a new public and private key pair (HPKE_KEY).
 // This function uses output parameters because ScopedEVP_HPKE_KEY is not
 // movable in older versions of BoringSSL.
@@ -63,7 +64,9 @@ void GenerateKeyPair(const EVP_HPKE_KEM& kem, std::string& public_key,
       1);
   public_key.resize(public_key_len);
 }
+#endif  // FCP_SUPPORT_CBOR
 
+#ifdef FCP_SUPPORT_CBOR
 TEST(CryptoTest, EncryptAndDecrypt) {
   std::string message = "some plaintext message";
   std::string associated_data = "plaintext associated data";
@@ -198,37 +201,31 @@ TEST(CryptoTest, EncryptWithCoseKey) {
   EXPECT_EQ(*decrypt_result, message);
 }
 
+#endif  // FCP_SUPPORT_CBOR
+
 TEST(CryptoTest, EncryptWithProtoKey) {
   std::string message = "some plaintext message";
   std::string associated_data = "plaintext associated data";
 
   MessageEncryptor encryptor;
-  auto [public_key, private_key] = GenerateHpkeKeyPair("key-id");
-  MessageDecryptor decryptor(std::vector<absl::string_view>{private_key});
-
-  // Convert the recipient's CWT to a fcp::confidentialcompute::Key. The
-  // MessageEncryptor should support that format as well.
-  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(public_key);
-  ABSL_ASSERT_OK(cwt);
-  ASSERT_TRUE(cwt->public_key);
-  fcp::confidentialcompute::Key key;
-  key.set_algorithm(Key::HPKE_X25519_SHA256_AES128_GCM);
-  key.set_purpose(Key::ENCRYPT);
-  key.set_key_id(cwt->public_key->key_id);
-  key.set_key_material(cwt->public_key->x);
+  auto [key, private_key] = GenerateHpkeKeyProtoPair("key-id");
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, key, associated_data);
   ABSL_ASSERT_OK(encrypt_result);
 
+#ifdef FCP_SUPPORT_CBOR
+  MessageDecryptor decryptor(std::vector<absl::string_view>{private_key});
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, associated_data,
       encrypt_result->encrypted_symmetric_key, associated_data,
       encrypt_result->encapped_key, "key-id");
   ABSL_ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
+#endif  // FCP_SUPPORT_CBOR
 }
 
+#ifdef FCP_SUPPORT_CBOR
 TEST(CryptoTest, EncryptForRelease) {
   std::string message = "some plaintext message";
   std::string associated_data = "plaintext associated data";
@@ -1008,6 +1005,7 @@ TEST(CryptoTest, UnwrapReleaseTokenWithNoEncappedKey) {
   EXPECT_THAT(unwrapped_release_token.status().message(),
               HasSubstr("Release token has no encapped key"));
 }
+#endif  // FCP_SUPPORT_CBOR
 
 TEST(EcdsaP256R1SignatureVerifierTest, VerifierWithInvalidPublicKeyFails) {
   // Verify a real signature with a bogus public key, which should fail.

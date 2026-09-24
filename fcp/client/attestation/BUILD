@@ -79,8 +79,8 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//fcp/base:digest",
-        "//fcp/confidentialcompute:cose",
         "//fcp/protos/confidentialcompute:key_cc_proto",
+        "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
         "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
         "//fcp/protos/federatedcompute:confidential_encryption_config_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",

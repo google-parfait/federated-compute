@@ -15,6 +15,7 @@ namespace {
 
 using ::absl_testing::IsOk;
 
+#ifdef FCP_SUPPORT_CBOR
 TEST(CryptoTestUtilTest, GenerateHpkeKeyPair) {
   auto [public_key, private_key] = GenerateHpkeKeyPair("key-id");
 
@@ -29,6 +30,25 @@ TEST(CryptoTestUtilTest, GenerateHpkeKeyPair) {
       encrypt_result->encapped_key, "key-id");
   ASSERT_THAT(decrypt_result, IsOk());
   EXPECT_EQ(*decrypt_result, "plaintext");
+}
+#endif  // FCP_SUPPORT_CBOR
+
+TEST(CryptoTestUtilTest, GenerateHpkeKeyProtoPair) {
+  auto [public_key, private_key] = GenerateHpkeKeyProtoPair("key-id");
+
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      MessageEncryptor().Encrypt("plaintext", public_key, "associated data");
+  ASSERT_THAT(encrypt_result, IsOk());
+
+#ifdef FCP_SUPPORT_CBOR
+  MessageDecryptor decryptor(std::vector<absl::string_view>{private_key});
+  absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
+      encrypt_result->ciphertext, "associated data",
+      encrypt_result->encrypted_symmetric_key, "associated data",
+      encrypt_result->encapped_key, "key-id");
+  ASSERT_THAT(decrypt_result, IsOk());
+  EXPECT_EQ(*decrypt_result, "plaintext");
+#endif  // FCP_SUPPORT_CBOR
 }
 
 }  // namespace

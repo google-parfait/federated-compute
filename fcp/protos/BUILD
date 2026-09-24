@@ -73,7 +73,6 @@ cc_grpc_library(
 proto_library(
     name = "plan_proto",
     srcs = ["plan.proto"],
-    visibility = default_visibility,
     deps = [
         ":data_type_proto",
         "//fcp/protos/confidentialcompute:windowing_schedule_proto",

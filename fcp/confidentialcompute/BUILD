@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("//fcp:config.bzl", "FCP_COPTS")
@@ -99,11 +100,41 @@ cc_test(
     ],
 )
 
+# CBOR support (via libcppbor) is disabled by default in OSS builds. Consumers
+# that require full COSE/CBOR encoding and decoding can opt in via
+# `--@federated_compute//fcp/confidentialcompute:support_cbor=true`.
+bool_flag(
+    name = "support_cbor",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "cbor_supported",
+    flag_values = {":support_cbor": "True"},
+)
+
+CBOR_OPTIONAL_DEPS = select({
+    ":cbor_supported": [
+        "//third_party/libcppbor",
+    ],
+    "//conditions:default": [
+    ],
+})
+
+CBOR_OPTIONAL_DEFINES = select({
+    ":cbor_supported": [
+        "FCP_SUPPORT_CBOR",
+    ],
+    "//conditions:default": [
+    ],
+})
+
 cc_library(
     name = "cose",
     srcs = ["cose.cc"],
     hdrs = ["cose.h"],
-    defines = ["FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG"],
+    defines = CBOR_OPTIONAL_DEFINES,
     visibility = ["//visibility:public"],
     deps = [
         "@com_google_absl//absl/base",
@@ -113,8 +144,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
-        "@libcppbor",
-    ],
+    ] + CBOR_OPTIONAL_DEPS,
 )
 
 cc_test(
@@ -186,6 +216,7 @@ cc_library(
         ":cose",
         ":crypto",
         "//fcp/base",
+        "//fcp/protos/confidentialcompute:key_cc_proto",
         "@boringssl//:crypto",
         "@com_google_absl//absl/log:absl_check",
         "@com_google_absl//absl/status:statusor",

@@ -35,6 +35,7 @@ using ::absl_testing::IsOkAndHolds;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
+#ifdef FCP_SUPPORT_CBOR
 TEST(OkpKeyTest, EncodeEmpty) {
   EXPECT_THAT(OkpKey().Encode(),
               IsOkAndHolds("\xa1"      // map with 1 item:
@@ -161,24 +162,22 @@ TEST(Ec2KeyTest, DecodeInvalid) {
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-using SymmetricKeyEncodeTest = testing::TestWithParam<bool>;
-INSTANTIATE_TEST_SUITE_P(EncodeWithoutLibcppbor, SymmetricKeyEncodeTest,
-                         testing::Bool());
+#endif  // FCP_SUPPORT_CBOR
 
-TEST_P(SymmetricKeyEncodeTest, EncodeEmpty) {
-  EXPECT_THAT(SymmetricKey().Encode(GetParam()),
+TEST(SymmetricKeyTest, EncodeEmpty) {
+  EXPECT_THAT(SymmetricKey().Encode(),
               IsOkAndHolds("\xa1"      // map with 1 item:
                            "\x01\x04"  // key type (1): Symmetric (4)
                            ));
 }
 
-TEST_P(SymmetricKeyEncodeTest, EncodeFull) {
+TEST(SymmetricKeyTest, EncodeFull) {
   EXPECT_THAT((SymmetricKey{
                    .algorithm = 7,
                    .key_ops = {1, 2},
                    .k = "secret",
                })
-                  .Encode(GetParam()),
+                  .Encode(),
               IsOkAndHolds("\xa4"              // map with 4 items:
                            "\x01\x04"          // key type (1): Symmetric (4)
                            "\x03\x07"          // algorithm (3): 7
@@ -187,70 +186,59 @@ TEST_P(SymmetricKeyEncodeTest, EncodeFull) {
                            ));
 }
 
-TEST_P(SymmetricKeyEncodeTest, EncodeAlgorithm) {
-  // Multi-byte positive values are only supported when using libcppbor.
-  EXPECT_THAT(
-      SymmetricKey{.algorithm = 24}.Encode(GetParam()),
-      GetParam() ? static_cast<testing::Matcher<absl::StatusOr<std::string>>>(
-                       absl_testing::StatusIs(absl::StatusCode::kUnimplemented))
-                 : IsOkAndHolds("\xa2\x01\x04\x03\x18\x18"));
+TEST(SymmetricKeyTest, EncodeAlgorithm) {
+  // Multi-byte positive values are not supported.
+  EXPECT_THAT(SymmetricKey{.algorithm = 24}.Encode(),
+              absl_testing::StatusIs(absl::StatusCode::kUnimplemented));
 
   // Inline unsigned ints are supported (0..23).
-  EXPECT_THAT(SymmetricKey{.algorithm = 23}.Encode(GetParam()),
+  EXPECT_THAT(SymmetricKey{.algorithm = 23}.Encode(),
               IsOkAndHolds("\xa2\x01\x04\x03\x17"));
-  EXPECT_THAT(SymmetricKey{.algorithm = 0}.Encode(GetParam()),
+  EXPECT_THAT(SymmetricKey{.algorithm = 0}.Encode(),
               IsOkAndHolds(absl::string_view("\xa2\x01\x04\x03\x00", 5)));
 
   // Inline negative ints are supported (-1..-24).
-  EXPECT_THAT(SymmetricKey{.algorithm = -1}.Encode(GetParam()),
+  EXPECT_THAT(SymmetricKey{.algorithm = -1}.Encode(),
               IsOkAndHolds("\xa2\x01\x04\x03\x20"));
-  EXPECT_THAT(SymmetricKey{.algorithm = -24}.Encode(GetParam()),
+  EXPECT_THAT(SymmetricKey{.algorithm = -24}.Encode(),
               IsOkAndHolds("\xa2\x01\x04\x03\x37"));
 
   // One byte negative ints are supported (-25..-256).
-  EXPECT_THAT(SymmetricKey{.algorithm = -25}.Encode(GetParam()),
+  EXPECT_THAT(SymmetricKey{.algorithm = -25}.Encode(),
               IsOkAndHolds("\xa2\x01\x04\x03\x38\x18"));
-  EXPECT_THAT(SymmetricKey{.algorithm = -256}.Encode(GetParam()),
+  EXPECT_THAT(SymmetricKey{.algorithm = -256}.Encode(),
               IsOkAndHolds("\xa2\x01\x04\x03\x38\xff"));
 
   // Two byte negative ints are supported (-257..-65536).
   EXPECT_THAT(
-      SymmetricKey{.algorithm = -257}.Encode(GetParam()),
+      SymmetricKey{.algorithm = -257}.Encode(),
       IsOkAndHolds(absl::string_view("\xa2\x01\x04\x03\x39\x01\x00", 7)));
-  EXPECT_THAT(SymmetricKey{.algorithm = -65536}.Encode(GetParam()),
+  EXPECT_THAT(SymmetricKey{.algorithm = -65536}.Encode(),
               IsOkAndHolds("\xa2\x01\x04\x03\x39\xff\xff"));
 
   // Four byte negative ints are supported (-65537..-4294967296).
-  EXPECT_THAT(SymmetricKey{.algorithm = -65537}.Encode(GetParam()),
+  EXPECT_THAT(SymmetricKey{.algorithm = -65537}.Encode(),
               IsOkAndHolds(absl::string_view(
                   "\xa2\x01\x04\x03\x3a\x00\x01\x00\x00", 9)));
-  EXPECT_THAT(SymmetricKey{.algorithm = -4294967296}.Encode(GetParam()),
+  EXPECT_THAT(SymmetricKey{.algorithm = -4294967296}.Encode(),
               IsOkAndHolds("\xa2\x01\x04\x03\x3a\xff\xff\xff\xff"));
 
-  // Eight byte negative ints are only supported when using libcppbor.
-  EXPECT_THAT(
-      SymmetricKey{.algorithm = -4294967297}.Encode(GetParam()),
-      GetParam()
-          ? static_cast<testing::Matcher<absl::StatusOr<std::string>>>(
-                absl_testing::StatusIs(absl::StatusCode::kUnimplemented))
-          : IsOkAndHolds(absl::string_view(
-                "\xa2\x01\x04\x03\x3b\x00\x00\x00\x01\x00\x00\x00\x00", 13)));
+  // Eight byte negative ints are not supported.
+  EXPECT_THAT(SymmetricKey{.algorithm = -4294967297}.Encode(),
+              absl_testing::StatusIs(absl::StatusCode::kUnimplemented));
 }
 
-TEST_P(SymmetricKeyEncodeTest, EncodeK) {
-  // Lengths through 23 are supported when not using libcppbor.
-  EXPECT_THAT(SymmetricKey{.k = std::string(1, 'x')}.Encode(GetParam()),
+TEST(SymmetricKeyTest, EncodeK) {
+  // Lengths through 23 are supported.
+  EXPECT_THAT(SymmetricKey{.k = std::string(1, 'x')}.Encode(),
               IsOkAndHolds("\xa2\x01\x04\x20\x41x"));
-  EXPECT_THAT(SymmetricKey{.k = std::string(23, 'x')}.Encode(GetParam()),
+  EXPECT_THAT(SymmetricKey{.k = std::string(23, 'x')}.Encode(),
               IsOkAndHolds("\xa2\x01\x04\x20\x57" + std::string(23, 'x')));
-  EXPECT_THAT(
-      SymmetricKey{.k = std::string(24, 'x')}.Encode(GetParam()),
-      GetParam()
-          ? static_cast<testing::Matcher<absl::StatusOr<std::string>>>(
-                absl_testing::StatusIs(absl::StatusCode::kUnimplemented))
-          : IsOkAndHolds("\xa2\x01\x04\x20\x58\x18xxxxxxxxxxxxxxxxxxxxxxxx"));
+  EXPECT_THAT(SymmetricKey{.k = std::string(24, 'x')}.Encode(),
+              absl_testing::StatusIs(absl::StatusCode::kUnimplemented));
 }
 
+#ifdef FCP_SUPPORT_CBOR
 TEST(SymmetricKeyTest, DecodeEmpty) {
   absl::StatusOr<SymmetricKey> key = SymmetricKey::Decode("\xa1\x01\x04");
   ABSL_ASSERT_OK(key);
@@ -905,6 +893,8 @@ TEST(ReleaseTokenTest, GetSigStructureForVerifying) {
                   "id\x3a\x00\x01\x00\x00\x43key\x47payload",
                   84)));
 }
+
+#endif  // FCP_SUPPORT_CBOR
 
 }  // namespace
 }  // namespace fcp::confidential_compute

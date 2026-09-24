@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "absl/strings/string_view.h"
+#include "fcp/protos/confidentialcompute/key.pb.h"
 
 namespace fcp::confidential_compute {
 
@@ -12,6 +13,12 @@ namespace fcp::confidential_compute {
 // KMS. The public key is encoded as a CWT and the private key is encoded as a
 // COSE_Key.
 std::pair<std::string, std::string> GenerateHpkeKeyPair(
+    absl::string_view key_id);
+
+// Generates a new public/private HPKE key pair where the public key is a
+// fcp::confidentialcompute::Key proto and the private key is encoded as a
+// COSE_Key.
+std::pair<fcp::confidentialcompute::Key, std::string> GenerateHpkeKeyProtoPair(
     absl::string_view key_id);
 
 }  // namespace fcp::confidential_compute

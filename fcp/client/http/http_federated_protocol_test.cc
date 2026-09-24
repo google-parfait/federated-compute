@@ -59,6 +59,7 @@
 #include "fcp/confidentialcompute/crypto_test_util.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
+#include "fcp/protos/confidentialcompute/payload_transparency.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
@@ -2372,14 +2373,15 @@ TEST_F(HttpFederatedProtocolTest,
 
   // Generate a new public key, which we'll pass to the client in the
   // ConfidentialEncryptionConfig.
-  auto [encoded_public_key, private_key] =
-      fcp::confidential_compute::GenerateHpkeKeyPair("key-id");
+  auto [public_key, private_key] =
+      fcp::confidential_compute::GenerateHpkeKeyProtoPair("key-id");
 
   // Note: we don't specify any attestation evidence nor attestation
   // endorsements in the encryption config, since we can't generate valid
   // attestations in a test anyway.
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
+  encryption_config.mutable_encryption_key()->set_payload(
+      public_key.SerializeAsString());
   // Empty SignedEndorsements since the task does not use endorsements.
   confidentialcompute::SignedEndorsements signed_endorsements;
 
@@ -2453,6 +2455,7 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
   EXPECT_EQ(blob_header.key_id(), "key-id");
 
+#ifdef FCP_SUPPORT_CBOR
   // Ensure that the ciphertext can be decrypted.
   fcp::confidential_compute::MessageDecryptor decryptor(
       std::vector<absl::string_view>{private_key});
@@ -2469,6 +2472,7 @@ TEST_F(HttpFederatedProtocolTest,
       UncompressWithGzip(*decrypted_uploaded_data);
   ABSL_ASSERT_OK(decompressed_uploaded_data);
   EXPECT_EQ(*decompressed_uploaded_data, checkpoint_str);
+#endif  // FCP_SUPPORT_CBOR
 }
 
 TEST_F(HttpFederatedProtocolTest,
@@ -2518,14 +2522,15 @@ TEST_F(HttpFederatedProtocolTest,
 
   // Generate a new public key, which we'll pass to the client in the
   // ConfidentialEncryptionConfig.
-  auto [encoded_public_key, private_key] =
-      fcp::confidential_compute::GenerateHpkeKeyPair("key-id");
+  auto [public_key, private_key] =
+      fcp::confidential_compute::GenerateHpkeKeyProtoPair("key-id");
 
   // Note: we don't specify any attestation evidence nor attestation
   // endorsements in the encryption config, since we can't generate valid
   // attestations in a test anyway.
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
+  encryption_config.mutable_encryption_key()->set_payload(
+      public_key.SerializeAsString());
   // Empty SignedEndorsements since the task does not use endorsements.
   confidentialcompute::SignedEndorsements signed_endorsements;
 
@@ -2600,6 +2605,7 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_EQ(blob_header.key_id(), "key-id");
   EXPECT_THAT(blob_header.payload_metadata(), EqualsProto(payload_metadata));
 
+#ifdef FCP_SUPPORT_CBOR
   // Ensure that the ciphertext can be decrypted.
   fcp::confidential_compute::MessageDecryptor decryptor(
       std::vector<absl::string_view>{private_key});
@@ -2616,6 +2622,7 @@ TEST_F(HttpFederatedProtocolTest,
       UncompressWithGzip(*decrypted_uploaded_data);
   ABSL_ASSERT_OK(decompressed_uploaded_data);
   EXPECT_EQ(*decompressed_uploaded_data, checkpoint_str);
+#endif  // FCP_SUPPORT_CBOR
 }
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaConfidentialAggWithSignedEndorsementsSuccess) {
@@ -2645,14 +2652,15 @@ TEST_F(HttpFederatedProtocolTest,
 
   // Generate a new public key, which we'll pass to the client in the
   // ConfidentialEncryptionConfig.
-  auto [encoded_public_key, private_key] =
-      fcp::confidential_compute::GenerateHpkeKeyPair("key-id");
+  auto [public_key, private_key] =
+      fcp::confidential_compute::GenerateHpkeKeyProtoPair("key-id");
 
   // Note: we don't specify any attestation evidence nor attestation
   // endorsements in the encryption config, since we can't generate valid
   // attestations in a test anyway.
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
+  encryption_config.mutable_encryption_key()->set_payload(
+      public_key.SerializeAsString());
 
   // Ensure that the server's attestation evidence is considered valid, and that
   // the signed_endorsements have been correctly plumbed through and parsed.
@@ -2726,6 +2734,7 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
   EXPECT_EQ(blob_header.key_id(), "key-id");
 
+#ifdef FCP_SUPPORT_CBOR
   // Ensure that the ciphertext can be decrypted.
   fcp::confidential_compute::MessageDecryptor decryptor(
       std::vector<absl::string_view>{private_key});
@@ -2742,6 +2751,7 @@ TEST_F(HttpFederatedProtocolTest,
       UncompressWithGzip(*decrypted_uploaded_data);
   ABSL_ASSERT_OK(decompressed_uploaded_data);
   EXPECT_EQ(*decompressed_uploaded_data, checkpoint_str);
+#endif  // FCP_SUPPORT_CBOR
 }
 
 TEST_F(HttpFederatedProtocolTest,
@@ -2830,9 +2840,11 @@ TEST_F(HttpFederatedProtocolTest,
   ComputationResults results = CreateFCCheckpointsResults();
   absl::Duration plan_duration = absl::Minutes(5);
 
+  auto [key_proto, private_key] =
+      fcp::confidential_compute::GenerateHpkeKeyProtoPair("key-id");
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(
-      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
+  encryption_config.mutable_encryption_key()->set_payload(
+      key_proto.SerializeAsString());
   confidentialcompute::SignedEndorsements signed_endorsements;
 
   EXPECT_CALL(
@@ -2954,9 +2966,11 @@ TEST_F(HttpFederatedProtocolTest,
   ComputationResults results = CreateFCCheckpointsResults();
   absl::Duration plan_duration = absl::Minutes(5);
 
+  auto [key_proto, private_key] =
+      fcp::confidential_compute::GenerateHpkeKeyProtoPair("key-id");
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(
-      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
+  encryption_config.mutable_encryption_key()->set_payload(
+      key_proto.SerializeAsString());
   confidentialcompute::SignedEndorsements signed_endorsements;
 
   EXPECT_CALL(
@@ -3124,9 +3138,11 @@ TEST_F(HttpFederatedProtocolTest,
   // Note: we don't specify any attestation evidence nor attestation
   // endorsements in the encryption config, since we can't generate valid
   // attestations in a test anyway.
+  auto [public_key, private_key] =
+      fcp::confidential_compute::GenerateHpkeKeyProtoPair("key-id");
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(
-      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
+  encryption_config.mutable_encryption_key()->set_payload(
+      public_key.SerializeAsString());
   // Empty SignedEndorsements since the task does not use endorsements.
   confidentialcompute::SignedEndorsements signed_endorsements;
 
@@ -4259,9 +4275,11 @@ TEST_F(HttpFederatedProtocolTest,
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   absl::Duration plan_duration = absl::Minutes(5);
 
+  auto [key_proto1, private_key1] =
+      fcp::confidential_compute::GenerateHpkeKeyProtoPair("key-id");
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(
-      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
+  encryption_config.mutable_encryption_key()->set_payload(
+      key_proto1.SerializeAsString());
   // Empty SignedEndorsements since the task does not use endorsements.
   confidentialcompute::SignedEndorsements signed_endorsements;
 
@@ -4329,9 +4347,11 @@ TEST_F(HttpFederatedProtocolTest,
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   absl::Duration plan_duration = absl::Minutes(5);
 
+  auto [key_proto2, private_key2] =
+      fcp::confidential_compute::GenerateHpkeKeyProtoPair("key-id");
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(
-      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
+  encryption_config.mutable_encryption_key()->set_payload(
+      key_proto2.SerializeAsString());
   // Empty SignedEndorsements since the task does not use endorsements.
   confidentialcompute::SignedEndorsements signed_endorsements;
 
@@ -4402,9 +4422,11 @@ TEST_F(HttpFederatedProtocolTest,
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   absl::Duration plan_duration = absl::Minutes(5);
 
+  auto [key_proto3, private_key3] =
+      fcp::confidential_compute::GenerateHpkeKeyProtoPair("key-id");
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(
-      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
+  encryption_config.mutable_encryption_key()->set_payload(
+      key_proto3.SerializeAsString());
   // Empty SignedEndorsements since the task does not use endorsements.
   confidentialcompute::SignedEndorsements signed_endorsements;
 

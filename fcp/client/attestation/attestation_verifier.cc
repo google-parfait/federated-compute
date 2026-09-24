@@ -23,11 +23,12 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "fcp/base/digest.h"
-#include "fcp/confidentialcompute/cose.h"
+#include "fcp/protos/confidentialcompute/key.pb.h"
+#include "fcp/protos/confidentialcompute/payload_transparency.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 
 namespace fcp::client::attestation {
-using ::fcp::confidential_compute::OkpCwt;
+using ::fcp::confidentialcompute::Key;
 using ::google::internal::federatedcompute::v1::ConfidentialEncryptionConfig;
 
 absl::StatusOr<AttestationVerifier::VerificationResult>
@@ -44,15 +45,17 @@ AlwaysPassingAttestationVerifier::Verify(
     const absl::Cord& access_policy,
     const confidentialcompute::SignedEndorsements& signed_endorsements,
     const ConfidentialEncryptionConfig& encryption_config) {
-  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(encryption_config.public_key());
-  if (!cwt.ok()) {
-    std::string error_msg =
-        "Parsing confidential aggregation public key failed.";
-    return absl::Status(cwt.status().code(), error_msg);
+  if (!encryption_config.has_encryption_key()) {
+    return absl::InvalidArgumentError("Missing encryption key");
   }
+  Key key;
+  if (!key.ParseFromString(encryption_config.encryption_key().payload())) {
+    return absl::InvalidArgumentError("failed to parse encryption key");
+  }
+  std::string key_id = key.key_id();
   return VerificationResult{
-      .public_key = encryption_config.public_key(),
-      .key_id = std::move(cwt->public_key->key_id),
+      .public_key = std::move(key),
+      .key_id = std::move(key_id),
       .access_policy_sha256 = ComputeSHA256(access_policy),
   };
 }

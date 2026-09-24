@@ -171,10 +171,8 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
   absl::Cleanup key_cleanup = [&symmetric_key]() {
     OPENSSL_cleanse(symmetric_key.k.data(), symmetric_key.k.size());
   };
-  bool encode_without_libcppbor =
-      std::holds_alternative<Key>(recipient_public_key);
   ABSL_ASSIGN_OR_RETURN(std::string serialized_symmetric_key,
-                        symmetric_key.Encode(encode_without_libcppbor));
+                        symmetric_key.Encode());
   absl::Cleanup serialized_key_cleanup = [&serialized_symmetric_key]() {
     OPENSSL_cleanse(serialized_symmetric_key.data(),
                     serialized_symmetric_key.size());
