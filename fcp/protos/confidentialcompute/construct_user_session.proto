@@ -36,3 +36,13 @@ message SessionTimeWindowMetadata {
   // is complete.
   repeated bytes key_ids = 3;
 }
+
+// Privacy ID of the user whose data is contained in a constructed user session.
+//
+// This is sensitive and is therefore attached to session blobs as an entry in
+// `fcp.confidentialcompute.ProtectedMetadata` (encrypted together with the
+// session data).
+message PrivacyIdMetadata {
+  // The privacy ID.
+  bytes privacy_id = 1;
+}

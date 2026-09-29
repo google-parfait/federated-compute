@@ -199,6 +199,21 @@ message AssociatedMetadata {
   repeated google.protobuf.Any metadata = 1;
 }
 
+// Protected (sensitive) metadata for a blob.
+//
+// Unlike AssociatedMetadata, which is visible to the untrusted side and is
+// cryptographically bound to the blob as AEAD associated data, protected
+// metadata is bundled together with the blob's data *before* encryption. It is
+// therefore only ever visible inside trusted containers.
+message ProtectedMetadata {
+  // A list of protected metadata values.
+  //
+  // It is up to the containers producing and consuming metadata to
+  // determine how protected metadata values should be handled. Repeated values
+  // with the same type_url are NOT allowed.
+  repeated google.protobuf.Any metadata = 1;
+}
+
 // Encodes metadata about a blob that is written to or read from the
 // TEE.
 message BlobMetadata {
