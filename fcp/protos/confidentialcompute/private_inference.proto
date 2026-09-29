@@ -17,6 +17,8 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+import "fcp/protos/confidentialcompute/private_logger_uploads_config.proto";
+
 // A customer-facing interface for configuring private inference queries in a
 // TEE-hosted federated analytics workload.
 message InferenceConfiguration {
@@ -203,8 +205,8 @@ enum GemmaTensorType {
   GEMMA_SFP = 2;
 }
 
-// Message to be passed in as part of FedSqlContainerInitializeConfiguration as
-// StreamInitializeRequest.configure.configuration for private inference in the
+// Message to be passed in as part of FedSqlContainerInitializeConfiguration or
+// BatchedInferenceContainerInitializeConfiguration for private inference in the
 // ConfidentialTransform API.
 message InferenceInitializeConfiguration {
   InferenceConfiguration inference_config = 1;
@@ -213,6 +215,19 @@ message InferenceInitializeConfiguration {
     GemmaInitializeConfiguration gemma_init_config = 2;
     LlamaCppInitializeConfiguration llama_cpp_init_config = 3;
   }
+}
+
+// Configures the standalone Batched Inference container initialization. This
+// is passed as InitializeRequest.configuration in the ConfidentialTransform
+// API.
+// TODO(team): Consider another mechanism of passing the private logger
+// upload config, e.g., a PrivateLoggerUploadsConfig that is independent of
+// container specific configuration, for example by passing it as a resource.
+message BatchedInferenceContainerInitializeConfiguration {
+  InferenceInitializeConfiguration inference_init_config = 1;
+
+  // Configuration for processing PrivateLogger uploads.
+  PrivateLoggerUploadsConfig private_logger_uploads_config = 2;
 }
 
 // Additional initialize configuration for gemma.cpp not covered by

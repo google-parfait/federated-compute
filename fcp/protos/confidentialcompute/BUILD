@@ -392,6 +392,9 @@ cc_proto_library(
 proto_library(
     name = "private_inference_proto",
     srcs = ["private_inference.proto"],
+    deps = [
+        ":private_logger_uploads_config_proto",
+    ],
 )
 
 cc_proto_library(
