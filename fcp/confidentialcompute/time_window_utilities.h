@@ -40,11 +40,11 @@ ValidateCivilTimeWindowSchedule(
         schedule);
 
 // Converts an event_time string to a CivilSecond, returns an error if invalid.
-// The event time string must be in the format YYYY-MM-DDTHH:MM:SS[+-]HH:MM.
-// If allow_fractional_seconds is true, also accepts
-// YYYY-MM-DDTHH:MM:SS.fff[+-]HH:MM (fractional seconds are truncated).
+// The event time string must be in the format
+// YYYY-MM-DDTHH:MM:SS[.fff](Z|[+-]HH:MM). Fractional seconds are truncated and
+// the timezone offset is ignored.
 absl::StatusOr<absl::CivilSecond> ConvertEventTimeToCivilSecond(
-    absl::string_view event_time, bool allow_fractional_seconds = false);
+    absl::string_view event_time);
 
 }  // namespace confidentialcompute
 }  // namespace fcp

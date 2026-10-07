@@ -262,20 +262,17 @@ TEST(TimeWindowUtilitiesTest, ConvertEventTimeToCivilSecondValid) {
 
 TEST(TimeWindowUtilitiesTest, ConvertEventTimeToCivilSecondInvalid) {
   // Invalid length
-  EXPECT_THAT(
-      ConvertEventTimeToCivilSecond("2024-01-05T13:05:00"),
-      StatusIs(absl::StatusCode::kInvalidArgument,
-               HasSubstr("Invalid event time format: incorrect length")));
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid event time format")));
   // Missing 'T'
   EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05 13:05:00+00:00"),
               StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Invalid event time format: missing T or "
-                                 "timezone modifier")));
+                       HasSubstr("Invalid event time format")));
   // Missing timezone modifier
   EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00 00:00"),
               StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Invalid event time format: missing T or "
-                                 "timezone modifier")));
+                       HasSubstr("Invalid event time format")));
   // Unparseable time
   EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-13-05T13:05:00+00:00"),
               StatusIs(absl::StatusCode::kInvalidArgument,
@@ -285,60 +282,42 @@ TEST(TimeWindowUtilitiesTest, ConvertEventTimeToCivilSecondInvalid) {
 TEST(TimeWindowUtilitiesTest,
      ConvertEventTimeToCivilSecondValidFractionalSeconds) {
   // With fractional seconds.
-  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123+00:00",
-                                            /*allow_fractional_seconds=*/true),
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123+00:00"),
               IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 13, 5, 0)));
   // High precision.
   EXPECT_THAT(
-      ConvertEventTimeToCivilSecond("2025-03-05T01:02:03.123456789-05:00",
-                                    /*allow_fractional_seconds=*/true),
+      ConvertEventTimeToCivilSecond("2025-03-05T01:02:03.123456789-05:00"),
       IsOkAndHolds(absl::CivilSecond(2025, 3, 5, 1, 2, 3)));
   // No fractional seconds.
-  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00+00:00",
-                                            /*allow_fractional_seconds=*/true),
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00+00:00"),
               IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 13, 5, 0)));
 }
 
 TEST(TimeWindowUtilitiesTest, ConvertEventTimeToCivilSecondValidZTimezone) {
   // Z offset with fractional seconds.
-  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123Z",
-                                            /*allow_fractional_seconds=*/true),
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123Z"),
               IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 13, 5, 0)));
   // Z offset without fractional seconds.
-  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00Z",
-                                            /*allow_fractional_seconds=*/true),
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00Z"),
               IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 13, 5, 0)));
 }
 
 TEST(TimeWindowUtilitiesTest,
-     ConvertEventTimeToCivilSecondFractionalSecondsEventTimeDisallowed) {
-  // Fractional seconds but allow_fractional_seconds is false.
-  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123+00:00",
-                                            /*allow_fractional_seconds=*/false),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Invalid event time format")));
-}
-
-TEST(TimeWindowUtilitiesTest,
-     ConvertEventTimeToCivilSecondInvalidFormatsFractionalSecondsAllowed) {
+     ConvertEventTimeToCivilSecondInvalidFractionalSecondsFormats) {
   // Incorrect fractional seconds delimiter.
-  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00,123+00:00",
-                                            /*allow_fractional_seconds=*/true),
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00,123+00:00"),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Invalid event time format")));
   // Missing timezone offset.
-  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123",
-                                            /*allow_fractional_seconds=*/true),
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123"),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Invalid event time format")));
   // Malformed timezone offset.
-  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123+00",
-                                            /*allow_fractional_seconds=*/true),
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.123+00"),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Invalid event time format")));
   // Incomplete fractional seconds.
-  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00.",
-                                            /*allow_fractional_seconds=*/true),
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00."),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Invalid event time format")));
 }

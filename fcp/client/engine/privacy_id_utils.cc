@@ -175,7 +175,7 @@ absl::StatusOr<SplitResults> SplitResultsByWindowedPrivacyId(
     const ExampleQueryResult& example_query_result,
     const PrivacyIdConfig& privacy_id_config,
     const ExampleQueryResult::VectorData::Values& event_time_values,
-    absl::string_view source_id, bool enable_privacy_id_v2) {
+    absl::string_view source_id) {
   // For each row, parse the event time, determine the time window it belongs
   // to, and compute the privacy ID for that window. Group row indices by
   // privacy ID, tracking the min/max event times per group for the event time
@@ -187,9 +187,7 @@ absl::StatusOr<SplitResults> SplitResultsByWindowedPrivacyId(
         event_time_values.string_values().value(i);
     ABSL_ASSIGN_OR_RETURN(
         absl::CivilSecond event_civil_second,
-        confidentialcompute::ConvertEventTimeToCivilSecond(
-            event_time_str,
-            /*allow_fractional_seconds=*/enable_privacy_id_v2));
+        confidentialcompute::ConvertEventTimeToCivilSecond(event_time_str));
 
     ABSL_ASSIGN_OR_RETURN(
         WindowingSchedule::CivilTimeWindowSchedule schedule,
@@ -236,7 +234,7 @@ absl::StatusOr<SplitResults> SplitResultsByNonRotatingPrivacyId(
     ExampleQuerySpec::ExampleQuery example_query,
     const ExampleQueryResult& example_query_result,
     const ExampleQueryResult::VectorData::Values& event_time_values,
-    absl::string_view source_id, bool enable_privacy_id_v2) {
+    absl::string_view source_id) {
   ABSL_ASSIGN_OR_RETURN(std::string privacy_id, GetPrivacyId(source_id));
 
   SplitResults split_results = {.example_query = std::move(example_query)};
@@ -255,11 +253,9 @@ absl::StatusOr<SplitResults> SplitResultsByNonRotatingPrivacyId(
   absl::CivilHour min_time = absl::CivilHour::max();
   absl::CivilHour max_time = absl::CivilHour::min();
   for (int i = 0; i < event_time_values.string_values().value_size(); ++i) {
-    ABSL_ASSIGN_OR_RETURN(
-        absl::CivilSecond event_civil_second,
-        confidentialcompute::ConvertEventTimeToCivilSecond(
-            event_time_values.string_values().value(i),
-            /*allow_fractional_seconds=*/enable_privacy_id_v2));
+    ABSL_ASSIGN_OR_RETURN(absl::CivilSecond event_civil_second,
+                          confidentialcompute::ConvertEventTimeToCivilSecond(
+                              event_time_values.string_values().value(i)));
     min_time = std::min(absl::CivilHour(event_civil_second), min_time);
     max_time = std::max(absl::CivilHour(event_civil_second), max_time);
   }
@@ -280,8 +276,7 @@ absl::StatusOr<SplitResults> SplitResultsByNonRotatingPrivacyId(
 absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
     ExampleQuerySpec::ExampleQuery example_query,
     const ExampleQueryResult& example_query_result,
-    const PrivacyIdConfig& privacy_id_config, absl::string_view source_id,
-    bool enable_privacy_id_v2) {
+    const PrivacyIdConfig& privacy_id_config, absl::string_view source_id) {
   // Find the event time column, which is required for both rotating and
   // non-rotating privacy IDs. The column name has a query-specific prefix, so
   // we match by suffix.
@@ -316,19 +311,17 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
         "Privacy ID column cannot already exist in the example query result");
   }
 
-  // Allow non-rotating privacy IDs when the flag is enabled and the windowing
-  // schedule is missing.
-  if (enable_privacy_id_v2 && !privacy_id_config.has_windowing_schedule()) {
-    return SplitResultsByNonRotatingPrivacyId(
-        std::move(example_query), example_query_result, *event_time_values,
-        source_id, enable_privacy_id_v2);
+  // When the windowing schedule is missing, assign a single non-rotating
+  // privacy ID derived from the source_id alone.
+  if (!privacy_id_config.has_windowing_schedule()) {
+    return SplitResultsByNonRotatingPrivacyId(std::move(example_query),
+                                              example_query_result,
+                                              *event_time_values, source_id);
   }
-  // When the windowing schedule is present, this computes rotating privacy IDs.
-  // When missing, this returns an error (preserving the original behavior when
-  // the flag is off).
+  // Otherwise, compute rotating privacy IDs based on the windowing schedule.
   return SplitResultsByWindowedPrivacyId(
       std::move(example_query), example_query_result, privacy_id_config,
-      *event_time_values, source_id, enable_privacy_id_v2);
+      *event_time_values, source_id);
 }
 
 }  // namespace engine

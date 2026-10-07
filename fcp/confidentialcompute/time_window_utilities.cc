@@ -60,24 +60,6 @@ absl::StatusOr<absl::CivilSecond> CalculateWindowStart(
   return absl::CivilSecond(window_start);
 }
 
-// Remove the timezone modifier from the event time. Event_time must be in the
-// format YYYY-MM-DDTHH:MM:SS[+-]HH:MM, and the result will be in the format
-// YYYY-MM-DDTHH:MM:SS.
-absl::StatusOr<std::string> RemoveTimezoneFromEventTime(
-    absl::string_view event_time) {
-  if (event_time.length() != 25) {
-    return absl::InvalidArgumentError(
-        "Invalid event time format: incorrect length");
-  }
-  // Basic check for the presence of 'T' and timezone sign.
-  if (event_time[10] != 'T' ||
-      (event_time[19] != '+' && event_time[19] != '-')) {
-    return absl::InvalidArgumentError(
-        "Invalid event time format: missing T or timezone modifier");
-  }
-  return std::string(event_time.substr(0, 19));
-}
-
 // Format the event time so that it is accepted by absl::ParseCivilTime by
 // removing fractional seconds and timezone modifiers.
 // Expects strings in the format YYYY-MM-DDTHH:MM:SS.fff[+-]HH:MM or
@@ -168,15 +150,9 @@ absl::StatusOr<absl::CivilSecond> GetTimeWindowStart(
 }
 
 absl::StatusOr<absl::CivilSecond> ConvertEventTimeToCivilSecond(
-    absl::string_view event_time, bool allow_fractional_seconds) {
-  std::string formatted_event_time;
-  if (allow_fractional_seconds) {
-    ABSL_ASSIGN_OR_RETURN(formatted_event_time,
-                          FormatEventTimeForParseCivilTime(event_time));
-  } else {
-    ABSL_ASSIGN_OR_RETURN(formatted_event_time,
-                          RemoveTimezoneFromEventTime(event_time));
-  }
+    absl::string_view event_time) {
+  ABSL_ASSIGN_OR_RETURN(std::string formatted_event_time,
+                        FormatEventTimeForParseCivilTime(event_time));
 
   absl::CivilSecond event_civil_second;
   if (!absl::ParseCivilTime(formatted_event_time, &event_civil_second)) {

@@ -47,7 +47,7 @@ struct SplitResults {
 // unique privacy ID.
 // Requires that the ExampleQueryResult has an event time column with the
 // kEventTimeColumnName. Event times should be in the format
-// YYYY-MM-DDTHH:MM:SS[+-]HH:MM.
+// YYYY-MM-DDTHH:MM:SS[.fff][+-]HH:MM.
 // If the privacy_id_config.windowing_schedule is unset, all rows are assigned
 // the same non-rotating privacy ID.
 // ExampleQueryResult must not already have a column with the
@@ -57,7 +57,7 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
         example_query,
     const fcp::client::ExampleQueryResult& example_query_result,
     const google::internal::federated::plan::PrivacyIdConfig& privacy_id_config,
-    absl::string_view source_id, bool enable_privacy_id_v2);
+    absl::string_view source_id);
 }  // namespace engine
 }  // namespace client
 }  // namespace fcp

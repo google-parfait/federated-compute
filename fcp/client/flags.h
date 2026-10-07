@@ -206,14 +206,6 @@ class Flags {
   // return true, but then drop out if not enough data is returned during
   // execution.
   virtual bool drop_out_based_data_availability() const { return false; }
-
-  // If true, enables:
-  // - Non-rotating privacy IDs: when a PrivacyIdConfig is set without a
-  //   windowing_schedule, all rows are assigned a single privacy ID derived
-  //   from the source_id alone.
-  // - Fractional seconds: event time strings may include fractional seconds
-  //   (e.g. "2024-01-01T10:00:00.123+00:00").
-  virtual bool enable_privacy_id_v2() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
