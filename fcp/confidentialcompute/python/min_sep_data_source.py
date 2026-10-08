@@ -81,7 +81,7 @@ def assign_blob_ids_to_rounds(
   shuffled_blob_indices = jax.random.permutation(key, len(blob_ids))
   blob_id_round_assignments = [[] for _ in range(min_sep)]
   for i, blob_index in enumerate(shuffled_blob_indices):
-    blob_id_round_assignments[i % min_sep].append(blob_ids[blob_index])
+    blob_id_round_assignments[i % min_sep].append(blob_ids[blob_index])  # pyrefly: ignore[bad-index]
   return blob_id_round_assignments
 
 
