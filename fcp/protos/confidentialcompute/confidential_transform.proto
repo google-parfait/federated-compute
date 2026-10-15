@@ -34,8 +34,8 @@ service ConfidentialTransform {
   //    WriteConfigurationRequest where commit is true. This step may be
   //    repeated for multiple configuration blobs.
   // 2. The client sends an InitializeRequest which contains a
-  //    container-specific proto configuration, max_num_sessions, decryption
-  //    keys, and container-specific constraints. The proto configuration may
+  //    container-specific proto configuration, decryption keys, and
+  //    container-specific constraints. The proto configuration may
   //    refer to larger configuration blobs passed via
   //    WriteConfigurationRequests.
   // This method must be called exactly once for the lifetime of the TEE, prior
@@ -78,9 +78,11 @@ message InitializeRequest {
   // Implementation-specific configuration to be passed to the TEE.
   google.protobuf.Any configuration = 1;
 
-  // The maximum number of sessions the trusted application can have open at
-  // once.
-  uint32 max_num_sessions = 2;
+  // Deprecated: containers no longer limit the number of concurrent sessions
+  // and ignore this field. It is still set by clients for compatibility with
+  // older container versions that enforce the limit, and will be removed once
+  // those versions are no longer supported.
+  uint32 max_num_sessions = 2 [deprecated = true];
 
   // Serialized and encrypted
   // fcp.confidentialcompute.AuthorizeConfidentialTransformResponse.ProtectedResponse,
