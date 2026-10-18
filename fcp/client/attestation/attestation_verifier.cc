@@ -21,42 +21,35 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/cord.h"
-#include "fcp/base/digest.h"
 #include "fcp/protos/confidentialcompute/key.pb.h"
 #include "fcp/protos/confidentialcompute/payload_transparency.pb.h"
-#include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 
 namespace fcp::client::attestation {
 using ::fcp::confidentialcompute::Key;
-using ::google::internal::federatedcompute::v1::ConfidentialEncryptionConfig;
+using ::fcp::confidentialcompute::SignedPayload;
 
 absl::StatusOr<AttestationVerifier::VerificationResult>
-AlwaysFailingAttestationVerifier::Verify(
-    const absl::Cord& access_policy,
-    const confidentialcompute::SignedEndorsements& signed_endorsements,
-    const ConfidentialEncryptionConfig& encryption_config) {
+AlwaysFailingAttestationVerifier::Verify(const SignedPayload& pipeline_config,
+                                         const SignedPayload& encryption_key) {
   return absl::FailedPreconditionError(
       "Attestation verification failed unconditionally.");
 }
 
 absl::StatusOr<AttestationVerifier::VerificationResult>
-AlwaysPassingAttestationVerifier::Verify(
-    const absl::Cord& access_policy,
-    const confidentialcompute::SignedEndorsements& signed_endorsements,
-    const ConfidentialEncryptionConfig& encryption_config) {
-  if (!encryption_config.has_encryption_key()) {
+AlwaysPassingAttestationVerifier::Verify(const SignedPayload& pipeline_config,
+                                         const SignedPayload& encryption_key) {
+  if (encryption_key.payload().empty()) {
     return absl::InvalidArgumentError("Missing encryption key");
   }
   Key key;
-  if (!key.ParseFromString(encryption_config.encryption_key().payload())) {
+  if (!key.ParseFromString(encryption_key.payload())) {
     return absl::InvalidArgumentError("failed to parse encryption key");
   }
   std::string key_id = key.key_id();
   return VerificationResult{
       .public_key = std::move(key),
       .key_id = std::move(key_id),
-      .access_policy_sha256 = ComputeSHA256(access_policy),
+      .access_policy_sha256 = "",
   };
 }
 

@@ -51,6 +51,7 @@
 #include "fcp/client/stats.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
+#include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
@@ -61,7 +62,6 @@
 #include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
-#include "proto/attestation/endorsement.pb.h"
 
 namespace fcp::client::http::internal {
 
@@ -236,7 +236,6 @@ TaskAssignment CreateTaskAssignment(
     const std::string& aggregation_session_id, const std::string& task_name,
     const std::string& target_uri_prefix,
     int32_t minimum_clients_in_server_visible_aggregate,
-    std::optional<Resource> confidential_data_access_policy,
     std::optional<Resource> signed_endorsements,
     std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info) {
   TaskAssignment task_assignment;
@@ -255,13 +254,9 @@ TaskAssignment CreateTaskAssignment(
     task_assignment.mutable_secure_aggregation_info()
         ->set_minimum_clients_in_server_visible_aggregate(
             minimum_clients_in_server_visible_aggregate);
-  } else if (confidential_data_access_policy.has_value()) {
+  } else if (signed_endorsements.has_value()) {
     *task_assignment.mutable_confidential_aggregation_info()
-         ->mutable_data_access_policy() = *confidential_data_access_policy;
-    if (signed_endorsements.has_value()) {
-      *task_assignment.mutable_confidential_aggregation_info()
-           ->mutable_signed_endorsements() = *signed_endorsements;
-    }
+         ->mutable_signed_endorsements() = *signed_endorsements;
   } else if (willow_agg_info.has_value()) {
     task_assignment.mutable_willow_aggregation_info()
         ->set_max_number_of_clients(willow_agg_info->max_number_of_clients);
@@ -281,15 +276,14 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
     const std::string& aggregation_session_id,
     int32_t minimum_clients_in_server_visible_aggregate,
     const std::string& target_uri_prefix,
-    std::optional<Resource> confidential_data_access_policy,
     std::optional<Resource> signed_endorsements,
     std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info) {
   StartTaskAssignmentResponse response;
   *response.mutable_task_assignment() = CreateTaskAssignment(
       plan, checkpoint, federated_select_uri_template, kClientSessionId,
       aggregation_session_id, kTaskName, target_uri_prefix,
-      minimum_clients_in_server_visible_aggregate,
-      confidential_data_access_policy, signed_endorsements, willow_agg_info);
+      minimum_clients_in_server_visible_aggregate, signed_endorsements,
+      willow_agg_info);
   return response;
 }
 
@@ -355,11 +349,8 @@ FakeHttpResponse CreateEmptySuccessHttpResponse() {
 
 confidentialcompute::SignedEndorsements GetFakeSignedEndorsements() {
   confidentialcompute::SignedEndorsements signed_endorsements;
-  auto signed_endorsement = signed_endorsements.add_signed_endorsement();
-  signed_endorsement->mutable_endorsement()->set_serialized(
-      "{\"payload\":{\"subject\":{\"name\":\"stefans signed endorsement\"}}}");
-  signed_endorsement->mutable_signature()->set_key_id(1);
-  signed_endorsement->mutable_signature()->set_raw("stefans public key");
+  signed_endorsements.mutable_pipeline_configuration()->set_payload(
+      "fake_pipeline_configuration");
   return signed_endorsements;
 }
 
@@ -508,9 +499,9 @@ absl::Status HttpFederatedProtocolTest::RunSuccessfulEligibilityEvalCheckin(
 absl::StatusOr<FederatedProtocol::CheckinResult>
 HttpFederatedProtocolTest::RunSuccessfulCheckin(
     bool report_eligibility_eval_result,
-    std::optional<std::string> confidential_data_access_policy,
+    std::optional<std::string> signed_endorsements,
     std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info,
-    bool set_relative_uri, std::optional<std::string> signed_endorsements) {
+    bool set_relative_uri) {
   // We return a fake response which returns the plan/initial checkpoint
   // data inline, to keep things simple.
   std::string expected_plan = kPlan;
@@ -521,17 +512,11 @@ HttpFederatedProtocolTest::RunSuccessfulCheckin(
   Resource checkpoint_resource;
   checkpoint_resource.mutable_inline_resource()->set_data(expected_checkpoint);
   std::string expected_aggregation_session_id = kAggregationSessionId;
-  std::optional<Resource> confidential_agg_resource;
   std::optional<Resource> signed_endorsements_resource;
-  if (confidential_data_access_policy.has_value()) {
-    confidential_agg_resource = Resource();
-    confidential_agg_resource->mutable_inline_resource()->set_data(
-        *confidential_data_access_policy);
-    if (signed_endorsements.has_value()) {
-      signed_endorsements_resource = Resource();
-      signed_endorsements_resource->mutable_inline_resource()->set_data(
-          *signed_endorsements);
-    }
+  if (signed_endorsements.has_value()) {
+    signed_endorsements_resource = Resource();
+    signed_endorsements_resource->mutable_inline_resource()->set_data(
+        *signed_endorsements);
   }
 
   StartTaskAssignmentResponse task_assignment_response =
@@ -539,8 +524,7 @@ HttpFederatedProtocolTest::RunSuccessfulCheckin(
           plan_resource, checkpoint_resource, kFederatedSelectUriTemplate,
           expected_aggregation_session_id, 0,
           set_relative_uri ? "/" : kAggregationTargetUri,
-          confidential_agg_resource, signed_endorsements_resource,
-          willow_agg_info);
+          signed_endorsements_resource, willow_agg_info);
 
   std::string request_uri;
   if (set_relative_uri) {
@@ -555,12 +539,12 @@ HttpFederatedProtocolTest::RunSuccessfulCheckin(
   TaskEligibilityInfo expected_eligibility_info = GetFakeTaskEligibilityInfo();
   bool enable_confidential_aggregation = false;
   bool enable_willow_secure_aggregation = false;
-  if (confidential_data_access_policy.has_value()) {
+  if (signed_endorsements.has_value()) {
     enable_confidential_aggregation = true;
   }
   if (willow_agg_info.has_value()) {
-    // Enable confidential aggregation even when there is no confidential data
-    // access policy
+    // Enable confidential aggregation even when there are no signed
+    // endorsements.
     enable_confidential_aggregation = true;
     enable_willow_secure_aggregation = true;
   }
@@ -600,7 +584,6 @@ HttpFederatedProtocolTest::RunSuccessfulCheckin(
 absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
 HttpFederatedProtocolTest::RunSuccessfulMultipleTaskAssignments(
     bool eligibility_eval_enabled, bool enable_confidential_aggregation,
-    std::optional<Resource> confidential_data_access_policy,
     std::optional<Resource> signed_endorsements) {
   if (eligibility_eval_enabled) {
     std::string report_eet_request_uri =
@@ -640,7 +623,7 @@ HttpFederatedProtocolTest::RunSuccessfulMultipleTaskAssignments(
       kMultiTaskId_1, kAggregationTargetUri,
       enable_confidential_aggregation ? 0
                                       : kMinimumClientsInServerVisibleAggregate,
-      confidential_data_access_policy, signed_endorsements);
+      signed_endorsements);
   Resource plan_2;
   std::string plan_uri = "https://fake.uri/plan";
   plan_2.set_uri(plan_uri);
@@ -653,7 +636,7 @@ HttpFederatedProtocolTest::RunSuccessfulMultipleTaskAssignments(
       kMultiTaskId_2, kAggregationTargetUri,
       enable_confidential_aggregation ? 0
                                       : kMinimumClientsInServerVisibleAggregate,
-      confidential_data_access_policy);
+      signed_endorsements);
   std::string expected_plan_2 = "expected_plan_2";
   std::string expected_checkpoint_2 = "expected_checkpoint_2";
 

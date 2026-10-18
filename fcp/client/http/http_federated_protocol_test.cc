@@ -43,7 +43,6 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/compression.h"
-#include "fcp/base/digest.h"
 #include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -60,6 +59,7 @@
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/confidentialcompute/payload_transparency.pb.h"
+#include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
@@ -70,7 +70,6 @@
 #include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
-#include "proto/attestation/endorsement.pb.h"
 
 namespace fcp::client::http::internal {
 namespace {
@@ -1483,26 +1482,30 @@ TEST_F(HttpFederatedProtocolTest,
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation=*/true));
-  std::string serialized_access_policy = "the access policy";
-  Resource access_policy_resource;
-  access_policy_resource.mutable_inline_resource()->set_data(
-      serialized_access_policy);
+  std::string serialized_signed_endorsements =
+      GetFakeSignedEndorsements().SerializeAsString();
+  Resource signed_endorsements_resource;
+  signed_endorsements_resource.mutable_inline_resource()->set_data(
+      serialized_signed_endorsements);
   auto result = RunSuccessfulMultipleTaskAssignments(
-      /*eligibility_eval_enabled*/ true,
+      /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation=*/true,
-      /*confidential_data_access_policy=*/access_policy_resource);
+      /*signed_endorsements=*/signed_endorsements_resource);
   ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
-  absl::Cord expected_access_policy(serialized_access_policy);
   auto task_assignment_1 = result->task_assignments[kMultiTaskId_1];
   ABSL_ASSERT_OK(task_assignment_1);
-  EXPECT_EQ(task_assignment_1->confidential_agg_info.value().data_access_policy,
-            expected_access_policy);
+  EXPECT_TRUE(task_assignment_1->confidential_agg_info.has_value());
+  EXPECT_EQ(
+      task_assignment_1->confidential_agg_info.value().signed_endorsements,
+      serialized_signed_endorsements);
 
   auto task_assignment_2 = result->task_assignments[kMultiTaskId_2];
   ABSL_ASSERT_OK(task_assignment_2);
-  EXPECT_EQ(task_assignment_2->confidential_agg_info.value().data_access_policy,
-            expected_access_policy);
+  EXPECT_TRUE(task_assignment_2->confidential_agg_info.has_value());
+  EXPECT_EQ(
+      task_assignment_2->confidential_agg_info.value().signed_endorsements,
+      serialized_signed_endorsements);
 }
 
 TEST_F(
@@ -1514,27 +1517,31 @@ TEST_F(
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation=*/true));
-  std::string serialized_access_policy = "the access policy";
-  Resource access_policy_resource;
-  access_policy_resource.mutable_inline_resource()->set_data(
-      serialized_access_policy);
+  std::string serialized_signed_endorsements =
+      GetFakeSignedEndorsements().SerializeAsString();
+  Resource signed_endorsements_resource;
+  signed_endorsements_resource.mutable_inline_resource()->set_data(
+      serialized_signed_endorsements);
   auto result = RunSuccessfulMultipleTaskAssignments(
-      /*eligibility_eval_enabled*/ true,
+      /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation=*/true,
-      /*confidential_data_access_policy=*/access_policy_resource);
+      /*signed_endorsements=*/signed_endorsements_resource);
   ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
-  absl::Cord expected_access_policy(serialized_access_policy);
   auto task_assignment_1 = result->task_assignments[kMultiTaskId_1];
   ABSL_ASSERT_OK(task_assignment_1);
-  EXPECT_EQ(task_assignment_1->confidential_agg_info.value().data_access_policy,
-            expected_access_policy);
+  EXPECT_TRUE(task_assignment_1->confidential_agg_info.has_value());
+  EXPECT_EQ(
+      task_assignment_1->confidential_agg_info.value().signed_endorsements,
+      serialized_signed_endorsements);
   EXPECT_EQ(task_assignment_1->task_identifier, "task_0");
 
   auto task_assignment_2 = result->task_assignments[kMultiTaskId_2];
   ABSL_ASSERT_OK(task_assignment_2);
-  EXPECT_EQ(task_assignment_2->confidential_agg_info.value().data_access_policy,
-            expected_access_policy);
+  EXPECT_TRUE(task_assignment_2->confidential_agg_info.has_value());
+  EXPECT_EQ(
+      task_assignment_2->confidential_agg_info.value().signed_endorsements,
+      serialized_signed_endorsements);
   EXPECT_EQ(task_assignment_2->task_identifier, "task_1");
 }
 
@@ -2352,128 +2359,6 @@ TEST_F(HttpFederatedProtocolTest,
               IsOkReportResult());
 }
 
-TEST_F(HttpFederatedProtocolTest,
-       TestReportCompletedViaConfidentialAggSuccessWithTfCheckpoint) {
-  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
-      .WillRepeatedly(Return(true));
-  // Issue an eligibility eval checkin first.
-  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*enable_confidential_aggregation*/ true));
-  std::string serialized_access_policy = "the access policy";
-  ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      /*report_eligibility_eval_result*/ true,
-      /*confidential_data_access_policy=*/serialized_access_policy));
-
-  // Create a fake checkpoint with 32 'X'.
-  std::string checkpoint_str(32, 'X');
-  ComputationResults results;
-  results.emplace("tensorflow_checkpoint", checkpoint_str);
-  absl::Duration plan_duration = absl::Minutes(5);
-
-  // Generate a new public key, which we'll pass to the client in the
-  // ConfidentialEncryptionConfig.
-  auto [public_key, private_key] =
-      fcp::confidential_compute::GenerateHpkeKeyProtoPair("key-id");
-
-  // Note: we don't specify any attestation evidence nor attestation
-  // endorsements in the encryption config, since we can't generate valid
-  // attestations in a test anyway.
-  ConfidentialEncryptionConfig encryption_config;
-  encryption_config.mutable_encryption_key()->set_payload(
-      public_key.SerializeAsString());
-  // Empty SignedEndorsements since the task does not use endorsements.
-  confidentialcompute::SignedEndorsements signed_endorsements;
-
-  // Ensure that the server's attestation evidence is considered valid.
-  EXPECT_CALL(
-      *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
-      .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-              const ConfidentialEncryptionConfig& encryption_config) {
-            return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
-          });
-
-  ExpectSuccessfulReportTaskResultRequest(
-      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, kTaskName, plan_duration);
-  ExpectSuccessfulStartAggregationDataUploadRequest(
-      "https://aggregation.uri/v1/confidentialaggregations/"
-      "AGGREGATION_SESSION_ID/"
-      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
-      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri,
-      false, encryption_config);
-
-  // Capture the raw uploaded data so we can subsequently validate that it was
-  // properly encrypted with the public key that was provided to the client.
-  std::string uploaded_data;
-  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
-                                     "https://bytestream.uri/upload/v1/media/"
-                                     "CHECKPOINT_RESOURCE?upload_protocol=raw",
-                                     HttpRequest::Method::kPost, _, _)))
-      .WillOnce([&uploaded_data](MockHttpClient::SimpleHttpRequest request) {
-        uploaded_data = request.body;
-        return CreateEmptySuccessHttpResponse();
-      });
-
-  ExpectSuccessfulSubmitAggregationResultRequest(
-      "https://aggregation.second.uri/v1/confidentialaggregations/"
-      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
-      /*confidential_aggregation=*/true);
-
-  EXPECT_THAT(federated_protocol_->ReportCompleted(std::move(results),
-                                                   plan_duration, std::nullopt),
-              IsOkReportResult());
-
-  // Validate that the payload can be parsed and that the ciphertext can be
-  // decrypted using the decryptor that generated the public encryption key.
-  absl::StatusOr<confidential_compute::ClientPayloadHeader> payload_header;
-  absl::string_view ciphertext;
-  {
-    absl::string_view uploaded_data_view(uploaded_data);
-    payload_header =
-        fcp::confidential_compute::DecodeAndConsumeClientPayloadHeader(
-            uploaded_data_view);
-    ABSL_ASSERT_OK(payload_header);
-    // The uploaded_data_view now contains just the ciphertext.
-    ciphertext = uploaded_data_view;
-  }
-
-  // Validate the payload header values.
-  EXPECT_TRUE(payload_header->is_gzip_compressed);
-  ::fcp::confidentialcompute::BlobHeader blob_header;
-  ASSERT_TRUE(
-      blob_header.ParseFromString(payload_header->serialized_blob_header));
-  EXPECT_EQ(blob_header.access_policy_sha256(),
-            ComputeSHA256(serialized_access_policy));
-  EXPECT_EQ(blob_header.access_policy_node_id(), 0);
-  EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
-  EXPECT_EQ(blob_header.key_id(), "key-id");
-
-#ifdef FCP_SUPPORT_CBOR
-  // Ensure that the ciphertext can be decrypted.
-  fcp::confidential_compute::MessageDecryptor decryptor(
-      std::vector<absl::string_view>{private_key});
-  auto decrypted_uploaded_data =
-      decryptor.Decrypt(ciphertext, payload_header->serialized_blob_header,
-                        payload_header->encrypted_symmetric_key,
-                        payload_header->serialized_blob_header,
-                        payload_header->encapsulated_public_key, "key-id");
-  ABSL_ASSERT_OK(decrypted_uploaded_data);
-
-  // The ciphertext contains compressed data, so we must decompress it before
-  // comparing it with the expected checkpoint.
-  auto decompressed_uploaded_data =
-      UncompressWithGzip(*decrypted_uploaded_data);
-  ABSL_ASSERT_OK(decompressed_uploaded_data);
-  EXPECT_EQ(*decompressed_uploaded_data, checkpoint_str);
-#endif  // FCP_SUPPORT_CBOR
-}
 
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaConfidentialAggSuccessWithFcCheckpoint) {
@@ -2486,10 +2371,13 @@ TEST_F(HttpFederatedProtocolTest,
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
-  std::string serialized_access_policy = "the access policy";
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
   ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      /*report_eligibility_eval_result*/ true,
-      /*confidential_data_access_policy=*/serialized_access_policy));
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/serialized_signed_endorsements));
 
   confidentialcompute::PayloadMetadata payload_metadata;
   payload_metadata.mutable_event_time_range()
@@ -2531,20 +2419,18 @@ TEST_F(HttpFederatedProtocolTest,
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.mutable_encryption_key()->set_payload(
       public_key.SerializeAsString());
-  // Empty SignedEndorsements since the task does not use endorsements.
-  confidentialcompute::SignedEndorsements signed_endorsements;
-
-  // Ensure that the server's attestation evidence is considered valid.
+  // Ensure that the server's attestation evidence is considered valid, and
+  // that the signed_endorsements have been correctly plumbed through and
+  // parsed.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
+      Verify(EqualsProto(GetFakeSignedEndorsements().pipeline_configuration()),
+             EqualsProto(encryption_config.encryption_key())))
       .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-              const ConfidentialEncryptionConfig& encryption_config) {
+          [=](const confidentialcompute::SignedPayload& pipeline_config,
+              const confidentialcompute::SignedPayload& encryption_key) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
+                pipeline_config, encryption_key);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -2598,8 +2484,7 @@ TEST_F(HttpFederatedProtocolTest,
   ::fcp::confidentialcompute::BlobHeader blob_header;
   ASSERT_TRUE(
       blob_header.ParseFromString(payload_header->serialized_blob_header));
-  EXPECT_EQ(blob_header.access_policy_sha256(),
-            ComputeSHA256(serialized_access_policy));
+  EXPECT_THAT(blob_header.access_policy_sha256(), IsEmpty());
   EXPECT_EQ(blob_header.access_policy_node_id(), 0);
   EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
   EXPECT_EQ(blob_header.key_id(), "key-id");
@@ -2632,16 +2517,12 @@ TEST_F(HttpFederatedProtocolTest,
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
-  std::string serialized_access_policy = "the access policy";
   confidentialcompute::SignedEndorsements signed_endorsements =
       GetFakeSignedEndorsements();
   std::string serialized_signed_endorsements =
       signed_endorsements.SerializeAsString();
   ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      /*report_eligibility_eval_result*/ true,
-      /*confidential_data_access_policy=*/serialized_access_policy,
-      /*willow_agg_info=*/std::nullopt,
-      /*set_relative_uri=*/false,
+      /*report_eligibility_eval_result=*/true,
       /*signed_endorsements=*/serialized_signed_endorsements));
 
   // Create a fake checkpoint with 32 'X'.
@@ -2664,17 +2545,15 @@ TEST_F(HttpFederatedProtocolTest,
 
   // Ensure that the server's attestation evidence is considered valid, and that
   // the signed_endorsements have been correctly plumbed through and parsed.
-  EXPECT_CALL(*mock_attestation_verifier_,
-              Verify(Eq(serialized_access_policy),
-                     EqualsProto(GetFakeSignedEndorsements()),
-                     EqualsProto(encryption_config)))
+  EXPECT_CALL(
+      *mock_attestation_verifier_,
+      Verify(EqualsProto(GetFakeSignedEndorsements().pipeline_configuration()),
+             EqualsProto(encryption_config.encryption_key())))
       .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-              const ConfidentialEncryptionConfig& encryption_config) {
+          [=](const confidentialcompute::SignedPayload& pipeline_config,
+              const confidentialcompute::SignedPayload& encryption_key) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
+                pipeline_config, encryption_key);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -2728,8 +2607,7 @@ TEST_F(HttpFederatedProtocolTest,
   ::fcp::confidentialcompute::BlobHeader blob_header;
   ASSERT_TRUE(
       blob_header.ParseFromString(payload_header->serialized_blob_header));
-  EXPECT_EQ(blob_header.access_policy_sha256(),
-            ComputeSHA256(serialized_access_policy));
+  EXPECT_THAT(blob_header.access_policy_sha256(), IsEmpty());
   EXPECT_EQ(blob_header.access_policy_node_id(), 0);
   EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
   EXPECT_EQ(blob_header.key_id(), "key-id");
@@ -2762,10 +2640,13 @@ TEST_F(HttpFederatedProtocolTest,
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
-  std::string serialized_access_policy = "the access policy";
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
   ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      /*report_eligibility_eval_result*/ true,
-      /*confidential_data_access_policy=*/serialized_access_policy));
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/serialized_signed_endorsements));
 
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -2777,20 +2658,17 @@ TEST_F(HttpFederatedProtocolTest,
   // verification failure case, which doesn't need any real values in the
   // config.
   ConfidentialEncryptionConfig encryption_config;
-  // Empty SignedEndorsements since the task does not use endorsements.
-  confidentialcompute::SignedEndorsements signed_endorsements;
 
   // Ensure that the server's attestation evidence is considered invalid.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
+      Verify(EqualsProto(GetFakeSignedEndorsements().pipeline_configuration()),
+             EqualsProto(encryption_config.encryption_key())))
       .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-              const ConfidentialEncryptionConfig& encryption_config) {
+          [=](const confidentialcompute::SignedPayload& pipeline_config,
+              const confidentialcompute::SignedPayload& encryption_key) {
             return attestation::AlwaysFailingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
+                pipeline_config, encryption_key);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -2832,10 +2710,13 @@ TEST_F(HttpFederatedProtocolTest,
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
-  std::string serialized_access_policy = "the access policy";
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
   ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      /*report_eligibility_eval_result*/ true,
-      /*confidential_data_access_policy=*/serialized_access_policy));
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/serialized_signed_endorsements));
 
   ComputationResults results = CreateFCCheckpointsResults();
   absl::Duration plan_duration = absl::Minutes(5);
@@ -2845,18 +2726,16 @@ TEST_F(HttpFederatedProtocolTest,
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.mutable_encryption_key()->set_payload(
       key_proto.SerializeAsString());
-  confidentialcompute::SignedEndorsements signed_endorsements;
 
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
+      Verify(EqualsProto(GetFakeSignedEndorsements().pipeline_configuration()),
+             EqualsProto(encryption_config.encryption_key())))
       .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-              const ConfidentialEncryptionConfig& encryption_config) {
+          [=](const confidentialcompute::SignedPayload& pipeline_config,
+              const confidentialcompute::SignedPayload& encryption_key) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
+                pipeline_config, encryption_key);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -2958,10 +2837,13 @@ TEST_F(HttpFederatedProtocolTest,
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
-  std::string serialized_access_policy = "the access policy";
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
   ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      /*report_eligibility_eval_result*/ true,
-      /*confidential_data_access_policy=*/serialized_access_policy));
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/serialized_signed_endorsements));
 
   ComputationResults results = CreateFCCheckpointsResults();
   absl::Duration plan_duration = absl::Minutes(5);
@@ -2971,18 +2853,16 @@ TEST_F(HttpFederatedProtocolTest,
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.mutable_encryption_key()->set_payload(
       key_proto.SerializeAsString());
-  confidentialcompute::SignedEndorsements signed_endorsements;
 
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
+      Verify(EqualsProto(GetFakeSignedEndorsements().pipeline_configuration()),
+             EqualsProto(encryption_config.encryption_key())))
       .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-              const ConfidentialEncryptionConfig& encryption_config) {
+          [=](const confidentialcompute::SignedPayload& pipeline_config,
+              const confidentialcompute::SignedPayload& encryption_key) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
+                pipeline_config, encryption_key);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -3056,10 +2936,13 @@ TEST_F(HttpFederatedProtocolTest,
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
-  std::string serialized_access_policy = "the access policy";
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
   ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      /*report_eligibility_eval_result*/ true,
-      /*confidential_data_access_policy=*/serialized_access_policy));
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/serialized_signed_endorsements));
 
   ComputationResults results = CreateFCCheckpointsResults();
   absl::Duration plan_duration = absl::Minutes(5);
@@ -3101,10 +2984,13 @@ TEST_F(HttpFederatedProtocolTest,
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
-  std::string serialized_access_policy = "the access policy";
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
   ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      /*report_eligibility_eval_result*/ true,
-      /*confidential_data_access_policy=*/serialized_access_policy));
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/serialized_signed_endorsements));
 
   confidentialcompute::PayloadMetadata payload_metadata;
   payload_metadata.mutable_event_time_range()
@@ -3143,20 +3029,18 @@ TEST_F(HttpFederatedProtocolTest,
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.mutable_encryption_key()->set_payload(
       public_key.SerializeAsString());
-  // Empty SignedEndorsements since the task does not use endorsements.
-  confidentialcompute::SignedEndorsements signed_endorsements;
-
-  // Ensure that the server's attestation evidence is considered valid.
+  // Ensure that the server's attestation evidence is considered valid, and
+  // that the signed_endorsements have been correctly plumbed through and
+  // parsed.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
+      Verify(EqualsProto(GetFakeSignedEndorsements().pipeline_configuration()),
+             EqualsProto(encryption_config.encryption_key())))
       .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-              const ConfidentialEncryptionConfig& encryption_config) {
+          [=](const confidentialcompute::SignedPayload& pipeline_config,
+              const confidentialcompute::SignedPayload& encryption_key) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
+                pipeline_config, encryption_key);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -3217,8 +3101,7 @@ TEST_F(HttpFederatedProtocolTest,
       ASSERT_TRUE(absl::WebSafeBase64Unescape(header.second, &unescaped));
       ::fcp::confidentialcompute::BlobHeader blob_header;
       ASSERT_TRUE(blob_header.ParseFromString(unescaped));
-      EXPECT_EQ(blob_header.access_policy_sha256(),
-                ComputeSHA256(serialized_access_policy));
+      EXPECT_THAT(blob_header.access_policy_sha256(), IsEmpty());
       EXPECT_EQ(blob_header.access_policy_node_id(), 0);
       EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
       EXPECT_EQ(blob_header.key_id(), "key-id");
@@ -3250,7 +3133,6 @@ TEST_F(HttpFederatedProtocolTest,
   auto result = RunSuccessfulMultipleTaskAssignments(
       /*eligibility_eval_enabled*/ true,
       /*enable_confidential_aggregation=*/true,
-      /*confidential_data_access_policy=*/Resource::default_instance(),
       /*signed_endorsements=*/signed_endorsements_resource);
   ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
@@ -3263,7 +3145,7 @@ TEST_F(HttpFederatedProtocolTest,
   auto task_assignment_2 = result->task_assignments[kMultiTaskId_2];
   ABSL_ASSERT_OK(task_assignment_2);
   EXPECT_EQ(
-      task_assignment_1->confidential_agg_info.value().signed_endorsements,
+      task_assignment_2->confidential_agg_info.value().signed_endorsements,
       serialized_signed_endorsements);
 }
 
@@ -4131,11 +4013,10 @@ TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingSimpleAgg) {
       /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ABSL_ASSERT_OK(
-      RunSuccessfulCheckin(true,
-                           /*confidential_data_access_policy=*/std::nullopt,
-                           /*willow_agg_info=*/std::nullopt,
-                           /*set_relative_uri=*/true));
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(true,
+                                      /*signed_endorsements=*/std::nullopt,
+                                      /*willow_agg_info=*/std::nullopt,
+                                      /*set_relative_uri=*/true));
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -4171,11 +4052,10 @@ TEST_F(HttpFederatedProtocolTest,
   ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
-  ABSL_ASSERT_OK(
-      RunSuccessfulCheckin(true,
-                           /*confidential_data_access_policy=*/std::nullopt,
-                           /*willow_agg_info=*/std::nullopt,
-                           /*set_relative_uri=*/true));
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(true,
+                                      /*signed_endorsements=*/std::nullopt,
+                                      /*willow_agg_info=*/std::nullopt,
+                                      /*set_relative_uri=*/true));
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -4215,11 +4095,10 @@ TEST_F(HttpFederatedProtocolTest,
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ABSL_ASSERT_OK(
-      RunSuccessfulCheckin(true,
-                           /*confidential_data_access_policy=*/std::nullopt,
-                           /*willow_agg_info=*/std::nullopt,
-                           /*set_relative_uri=*/true));
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(true,
+                                      /*signed_endorsements=*/std::nullopt,
+                                      /*willow_agg_info=*/std::nullopt,
+                                      /*set_relative_uri=*/true));
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -4264,10 +4143,15 @@ TEST_F(HttpFederatedProtocolTest,
       /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  std::string serialized_access_policy = "the access policy";
-  ABSL_ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
-                                      /*willow_agg_info=*/std::nullopt,
-                                      /*set_relative_uri=*/true));
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/serialized_signed_endorsements,
+      /*willow_agg_info=*/std::nullopt,
+      /*set_relative_uri=*/true));
 
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -4280,20 +4164,18 @@ TEST_F(HttpFederatedProtocolTest,
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.mutable_encryption_key()->set_payload(
       key_proto1.SerializeAsString());
-  // Empty SignedEndorsements since the task does not use endorsements.
-  confidentialcompute::SignedEndorsements signed_endorsements;
-
-  // Ensure that the server's attestation evidence is considered valid.
+  // Ensure that the server's attestation evidence is considered valid, and
+  // that the signed_endorsements have been correctly plumbed through and
+  // parsed.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
+      Verify(EqualsProto(GetFakeSignedEndorsements().pipeline_configuration()),
+             EqualsProto(encryption_config.encryption_key())))
       .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-              const ConfidentialEncryptionConfig& encryption_config) {
+          [=](const confidentialcompute::SignedPayload& pipeline_config,
+              const confidentialcompute::SignedPayload& encryption_key) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
+                pipeline_config, encryption_key);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -4336,10 +4218,15 @@ TEST_F(HttpFederatedProtocolTest,
       /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  std::string serialized_access_policy = "the access policy";
-  ABSL_ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
-                                      /*willow_agg_info=*/std::nullopt,
-                                      /*set_relative_uri=*/true));
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/serialized_signed_endorsements,
+      /*willow_agg_info=*/std::nullopt,
+      /*set_relative_uri=*/true));
 
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -4352,20 +4239,18 @@ TEST_F(HttpFederatedProtocolTest,
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.mutable_encryption_key()->set_payload(
       key_proto2.SerializeAsString());
-  // Empty SignedEndorsements since the task does not use endorsements.
-  confidentialcompute::SignedEndorsements signed_endorsements;
-
-  // Ensure that the server's attestation evidence is considered valid.
+  // Ensure that the server's attestation evidence is considered valid, and
+  // that the signed_endorsements have been correctly plumbed through and
+  // parsed.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
+      Verify(EqualsProto(GetFakeSignedEndorsements().pipeline_configuration()),
+             EqualsProto(encryption_config.encryption_key())))
       .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-              const ConfidentialEncryptionConfig& encryption_config) {
+          [=](const confidentialcompute::SignedPayload& pipeline_config,
+              const confidentialcompute::SignedPayload& encryption_key) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
+                pipeline_config, encryption_key);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -4411,10 +4296,15 @@ TEST_F(HttpFederatedProtocolTest,
       /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  std::string serialized_access_policy = "the access policy";
-  ABSL_ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
-                                      /*willow_agg_info=*/std::nullopt,
-                                      /*set_relative_uri=*/true));
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/serialized_signed_endorsements,
+      /*willow_agg_info=*/std::nullopt,
+      /*set_relative_uri=*/true));
 
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -4427,21 +4317,18 @@ TEST_F(HttpFederatedProtocolTest,
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.mutable_encryption_key()->set_payload(
       key_proto3.SerializeAsString());
-  // Empty SignedEndorsements since the task does not use endorsements.
-  confidentialcompute::SignedEndorsements signed_endorsements;
-
-  // Ensure that the server's attestation evidence is considered valid.
+  // Ensure that the server's attestation evidence is considered valid, and
+  // that the signed_endorsements have been correctly plumbed through and
+  // parsed.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
+      Verify(EqualsProto(GetFakeSignedEndorsements().pipeline_configuration()),
+             EqualsProto(encryption_config.encryption_key())))
       .WillRepeatedly(
-          [=](const absl::Cord& access_policy,
-              const confidentialcompute::SignedEndorsements&
-                  signed_endorsements,
-
-              const ConfidentialEncryptionConfig& encryption_config) {
+          [=](const confidentialcompute::SignedPayload& pipeline_config,
+              const confidentialcompute::SignedPayload& encryption_key) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, signed_endorsements, encryption_config);
+                pipeline_config, encryption_key);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -4481,11 +4368,10 @@ TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingSecAgg) {
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ABSL_ASSERT_OK(
-      RunSuccessfulCheckin(true,
-                           /*confidential_data_access_policy=*/std::nullopt,
-                           /*willow_agg_info=*/std::nullopt,
-                           /*set_relative_uri=*/true));
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(/*report_eligibility_eval_result=*/true,
+                                      /*signed_endorsements=*/std::nullopt,
+                                      /*willow_agg_info=*/std::nullopt,
+                                      /*set_relative_uri=*/true));
 
   StartSecureAggregationResponse start_secure_aggregation_response;
   start_secure_aggregation_response.set_client_token(kClientToken);
@@ -4588,7 +4474,8 @@ TEST_F(HttpFederatedProtocolTest,
       /*set_relative_uri=*/true));
 
   ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      true, /*confidential_data_access_policy=*/std::nullopt,
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/std::nullopt,
       /*willow_agg_info=*/std::nullopt,
       /*set_relative_uri=*/true));
 
@@ -4751,8 +4638,8 @@ TEST_F(HttpFederatedProtocolTest,
   StartTaskAssignmentResponse task_assignment_response =
       GetFakeTaskAssignmentResponse(
           Resource(), Resource(), kFederatedSelectUriTemplate,
-          kAggregationSessionId, 0, kAggregationTargetUri, std::nullopt,
-          std::nullopt,
+          kAggregationSessionId, 0, kAggregationTargetUri,
+          /*signed_endorsements=*/std::nullopt,
           FederatedProtocol::WillowAggInfo{
               .input_spec = absl::Cord(
                   fake_willow_input_spec_resource.inline_resource().data()),
@@ -4812,11 +4699,10 @@ TEST_F(HttpFederatedProtocolTest, TestWillowEncryptorReceivesCorrectArguments) {
       .max_number_of_clients = fake_willow_max_number_of_clients};
 
   ABSL_ASSERT_OK(RunSuccessfulCheckin(
-      /*report_eligibility_eval_result*/ true,
-      /*confidential_data_access_policy=*/std::nullopt,
+      /*report_eligibility_eval_result=*/true,
+      /*signed_endorsements=*/std::nullopt,
       /*willow_agg_info=*/fake_willow_agg_info,
-      /*set_relative_uri=*/false,
-      /*signed_endorsements=*/std::nullopt));
+      /*set_relative_uri=*/false));
 
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"

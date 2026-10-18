@@ -627,10 +627,9 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
             FetchTaskResources({TaskResources{
                 .plan = task.plan(),
                 .checkpoint = task.init_checkpoint(),
-                // Eligibility eval tasks have no confidential
-                // data access policy, endorsements or Willow encoding to fetch.
-                .confidential_data_access_policy = Resource(),
-                .signed_endorsements = Resource(),
+                // Eligibility eval tasks have no endorsements or Willow
+                // encoding to fetch.
+                .confidential_pipeline_config_endorsements = Resource(),
                 .willow_input_spec = Resource()}}));
         if (!task_resources[0].ok()) {
           return task_resources[0].status();
@@ -882,11 +881,9 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
       FetchTaskResources({TaskResources{
           .plan = task_assignment.plan(),
           .checkpoint = task_assignment.init_checkpoint(),
-          .confidential_data_access_policy =
+          .confidential_pipeline_config_endorsements =
               task_assignment.confidential_aggregation_info()
-                  .data_access_policy(),
-          .signed_endorsements = task_assignment.confidential_aggregation_info()
-                                     .signed_endorsements(),
+                  .signed_endorsements(),
           .willow_input_spec =
               task_assignment.willow_aggregation_info().input_spec()}}));
   auto task_resources = task_resources_vec[0];
@@ -899,13 +896,9 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
                             task_assignment, ObjectState::kCheckinAccepted));
 
   if (result.confidential_agg_info.has_value()) {
-    result.confidential_agg_info->data_access_policy =
-        task_resources->confidential_data_access_policy;
-    default_task_info_.confidential_data_access_policy =
-        result.confidential_agg_info->data_access_policy;
     result.confidential_agg_info->signed_endorsements =
-        task_resources->signed_endorsements;
-    default_task_info_.signed_endorsements =
+        task_resources->confidential_pipeline_config_endorsements;
+    default_task_info_.confidential_pipeline_config_endorsements =
         result.confidential_agg_info->signed_endorsements;
   }
 
@@ -1164,11 +1157,9 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
     TaskResources task_resources{
         .plan = task_assignment.plan(),
         .checkpoint = task_assignment.init_checkpoint(),
-        .confidential_data_access_policy =
+        .confidential_pipeline_config_endorsements =
             task_assignment.confidential_aggregation_info()
-                .data_access_policy(),
-        .signed_endorsements = task_assignment.confidential_aggregation_info()
-                                   .signed_endorsements(),
+                .signed_endorsements(),
         .willow_input_spec =
             task_assignment.willow_aggregation_info().input_spec()};
     resources_to_fetch.push_back(task_resources);
@@ -1202,19 +1193,13 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
       task_assignment.payloads =
           std::move((*payloads)->plan_and_checkpoint_payloads);
       if (task_assignment.confidential_agg_info.has_value()) {
-        task_assignment.confidential_agg_info->data_access_policy =
-            std::move((*payloads)->confidential_data_access_policy);
-        // If the task does not use SignedEndorsements, this will be an empty
-        // Cord.
+        // If the server did not provide pipeline configuration endorsements,
+        // this will be an empty Cord.
         task_assignment.confidential_agg_info->signed_endorsements =
-            std::move((*payloads)->signed_endorsements);
-        // Store the serialized data access policy in the PerTaskInfo, since
-        // we need to calculate a hash over it at upload time.
+            std::move((*payloads)->confidential_pipeline_config_endorsements);
+        // Also need the endorsements in the task info map.
         task_info_map_[task_assignment.task_identifier]
-            .confidential_data_access_policy =
-            task_assignment.confidential_agg_info->data_access_policy;
-        // Also need the SignedEndorsements in the task info map.
-        task_info_map_[task_assignment.task_identifier].signed_endorsements =
+            .confidential_pipeline_config_endorsements =
             task_assignment.confidential_agg_info->signed_endorsements;
       }
       if (task_assignment.willow_agg_info.has_value()) {
@@ -1698,22 +1683,22 @@ HttpFederatedProtocol::CreatePerUploadInfo(
 absl::StatusOr<attestation::AttestationVerifier::VerificationResult>
 HttpFederatedProtocol::ValidateConfidentialEncryptionConfig(
     PerTaskInfo& task_info, PerUploadInfo& per_upload_info) {
-  FCP_CHECK(task_info.confidential_data_access_policy.has_value());
   FCP_CHECK(per_upload_info.confidential_encryption_config.has_value());
-  // At this point, task_info.signed_endorsements will only be non-empty if the
-  // flag enabling endorsement verification is true and we got a signed
-  // endorsements proto from the server.
-  confidentialcompute::SignedEndorsements signed_endorsements;
-  if (task_info.signed_endorsements.has_value() &&
-      !task_info.signed_endorsements->empty()) {
-    if (!signed_endorsements.ParseFromString(
-            task_info.signed_endorsements.value())) {
-      return absl::InvalidArgumentError("Could not parse signed_endorsements");
+  // At this point, task_info.confidential_pipeline_config_endorsements will
+  // only be empty if the server did not provide pipeline configuration
+  // endorsements.
+  confidentialcompute::SignedEndorsements pipeline_config_endorsements;
+  if (task_info.confidential_pipeline_config_endorsements.has_value() &&
+      !task_info.confidential_pipeline_config_endorsements->empty()) {
+    if (!pipeline_config_endorsements.ParseFromString(
+            task_info.confidential_pipeline_config_endorsements.value())) {
+      return absl::InvalidArgumentError(
+          "Could not parse confidential_pipeline_config_endorsements");
     }
   }
   auto result = attestation_verifier_->Verify(
-      *task_info.confidential_data_access_policy, signed_endorsements,
-      *per_upload_info.confidential_encryption_config);
+      pipeline_config_endorsements.pipeline_configuration(),
+      per_upload_info.confidential_encryption_config->encryption_key());
   if (!result.ok()) {
     task_info.state = ObjectState::kReportFailedPermanentError;
     std::string server_error_msg =
@@ -1733,7 +1718,6 @@ HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
     const std::variant<absl::string_view, confidentialcompute::Key>& public_key,
     std::string inner_payload, const std::string& serialized_blob_header,
     PerUploadInfo& per_upload_info) {
-  FCP_CHECK(task_info.confidential_data_access_policy.has_value());
 
   // Compress the payload before we encrypt it.
   absl::StatusOr<std::string> compressed_payload =
@@ -2240,17 +2224,11 @@ HttpFederatedProtocol::FetchTaskResources(
       results.push_back(checkpoint_uri_or_data.status());
       continue;
     }
-    auto confidential_data_access_policy_uri_or_data =
+    auto pipeline_config_endorsements_uri_or_data =
         ConvertResourceToUriOrInlineData(
-            task_resources.confidential_data_access_policy);
-    if (!confidential_data_access_policy_uri_or_data.ok()) {
-      results.push_back(confidential_data_access_policy_uri_or_data.status());
-      continue;
-    }
-    auto signed_endorsements_uri_or_data =
-        ConvertResourceToUriOrInlineData(task_resources.signed_endorsements);
-    if (!signed_endorsements_uri_or_data.ok()) {
-      results.push_back(signed_endorsements_uri_or_data.status());
+            task_resources.confidential_pipeline_config_endorsements);
+    if (!pipeline_config_endorsements_uri_or_data.ok()) {
+      results.push_back(pipeline_config_endorsements_uri_or_data.status());
       continue;
     }
     auto willow_input_spec_uri_or_data =
@@ -2264,8 +2242,7 @@ HttpFederatedProtocol::FetchTaskResources(
     results.push_back(FetchedTaskResources{});
     uris_to_fetch.push_back(*plan_uri_or_data);
     uris_to_fetch.push_back(*checkpoint_uri_or_data);
-    uris_to_fetch.push_back(*confidential_data_access_policy_uri_or_data);
-    uris_to_fetch.push_back(*signed_endorsements_uri_or_data);
+    uris_to_fetch.push_back(*pipeline_config_endorsements_uri_or_data);
     uris_to_fetch.push_back(*willow_input_spec_uri_or_data);
   }
 
@@ -2292,14 +2269,10 @@ HttpFederatedProtocol::FetchTaskResources(
     }
     auto plan_data_response = response_it++;
     auto checkpoint_data_response = response_it++;
-    // The confidential data access policy resource is only specified for tasks
-    // using confidential aggregation, so we must only try and access it in
-    // those cases.
-    auto confidential_data_access_policy_response = response_it++;
-    // The signed endorsements resource is only specified for tasks
-    // using confidential aggregation, and only those with signed endorsements,
-    // so we must only try and access it in those cases.
-    auto signed_endorsements_response = response_it++;
+    // The pipeline configuration endorsements resource is only specified for
+    // tasks using confidential aggregation, so we must only try and access it
+    // in those cases.
+    auto pipeline_config_endorsements_response = response_it++;
     // The willow input spec resource is only specified for tasks
     // using willow aggregation, so we must only try and access it in those
     // cases.
@@ -2307,8 +2280,7 @@ HttpFederatedProtocol::FetchTaskResources(
 
     pending_result = CreateFetchedTaskResources(
         *plan_data_response, *checkpoint_data_response,
-        *confidential_data_access_policy_response,
-        *signed_endorsements_response, *willow_input_spec_response);
+        *pipeline_config_endorsements_response, *willow_input_spec_response);
   }
   return results;
 }
@@ -2318,8 +2290,7 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
     absl::StatusOr<InMemoryHttpResponse>& plan_data_response,
     absl::StatusOr<InMemoryHttpResponse>& checkpoint_data_response,
     absl::StatusOr<InMemoryHttpResponse>&
-        confidential_data_access_policy_response,
-    absl::StatusOr<InMemoryHttpResponse>& signed_endorsements_response,
+        confidential_pipeline_config_endorsements_response,
     absl::StatusOr<InMemoryHttpResponse>& willow_input_spec_response) {
   // Note: we forward any error during the fetching of the task resources to
   // the caller, which means that these error codes will be checked against
@@ -2336,18 +2307,12 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
         absl::StrCat("checkpoint fetch failed: ",
                      checkpoint_data_response.status().ToString()));
   }
-  if (!confidential_data_access_policy_response.ok()) {
+  if (!confidential_pipeline_config_endorsements_response.ok()) {
     return absl::Status(
-        confidential_data_access_policy_response.status().code(),
-        absl::StrCat(
-            "confidential data access policy fetch failed: ",
-            confidential_data_access_policy_response.status().ToString()));
-  }
-  if (!signed_endorsements_response.ok()) {
-    return absl::Status(
-        signed_endorsements_response.status().code(),
-        absl::StrCat("signed endorsements fetch failed: ",
-                     signed_endorsements_response.status().ToString()));
+        confidential_pipeline_config_endorsements_response.status().code(),
+        absl::StrCat("pipeline configuration endorsements fetch failed: ",
+                     confidential_pipeline_config_endorsements_response.status()
+                         .ToString()));
   }
   if (!willow_input_spec_response.ok()) {
     return absl::Status(
@@ -2360,9 +2325,8 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
       .plan_and_checkpoint_payloads =
           FederatedProtocol::PlanAndCheckpointPayloads{
               plan_data_response->body, checkpoint_data_response->body},
-      .confidential_data_access_policy =
-          confidential_data_access_policy_response->body,
-      .signed_endorsements = signed_endorsements_response->body,
+      .confidential_pipeline_config_endorsements =
+          confidential_pipeline_config_endorsements_response->body,
       .willow_input_spec = willow_input_spec_response->body};
 }
 

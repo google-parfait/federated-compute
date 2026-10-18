@@ -21,17 +21,14 @@
 #include <variant>
 
 #include "absl/status/statusor.h"
-#include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "fcp/protos/confidentialcompute/key.pb.h"
-#include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
-#include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
-#include "fcp/protos/federatedcompute/confidential_encryption_config.pb.h"
+#include "fcp/protos/confidentialcompute/payload_transparency.pb.h"
 
 namespace fcp::client::attestation {
 
-// Verifies whether a given confidential data access policy and encryption
-// config are valid.
+// Verifies whether a given endorsed pipeline configuration and endorsed
+// encryption key are valid.
 class AttestationVerifier {
  public:
   struct VerificationResult {
@@ -51,15 +48,14 @@ class AttestationVerifier {
 
   virtual ~AttestationVerifier() = default;
 
-  // Validates the given access policy and encryption config, and if both are
-  // considered valid returns information extracted from the encryption config
-  // with which confidential data can be encrypted. Returns an error if the
-  // inputs are not considered a valid confidential configuration.
+  // Validates the given signed endorsements for the pipeline configuration and
+  // the signed encryption key, and if both are considered valid returns
+  // information extracted from the encryption key with which confidential data
+  // can be encrypted. Returns an error if the inputs are not considered a valid
+  // confidential configuration.
   virtual absl::StatusOr<VerificationResult> Verify(
-      const absl::Cord& access_policy,
-      const confidentialcompute::SignedEndorsements& signed_endorsements,
-      const google::internal::federatedcompute::v1::
-          ConfidentialEncryptionConfig& encryption_config) = 0;
+      const confidentialcompute::SignedPayload& pipeline_config,
+      const confidentialcompute::SignedPayload& encryption_key) = 0;
 };
 
 // An AttestationVerifier implementation that always returns a verification
@@ -67,23 +63,18 @@ class AttestationVerifier {
 class AlwaysFailingAttestationVerifier : public AttestationVerifier {
  public:
   absl::StatusOr<VerificationResult> Verify(
-      const absl::Cord& access_policy,
-      const confidentialcompute::SignedEndorsements& signed_endorsements,
-      const google::internal::federatedcompute::v1::
-          ConfidentialEncryptionConfig& encryption_config) override;
+      const confidentialcompute::SignedPayload& pipeline_config,
+      const confidentialcompute::SignedPayload& encryption_key) override;
 };
 
 // An AttestationVerifier implementation that does no actual validation of the
-// access policy or encryption config, but still extracts and returns the
-// public encryption key from the encryption config (hence acting as if the
-// validation actually passed).
+// pipeline configuration or encryption key, but still extracts and returns the
+// public encryption key (hence acting as if the validation actually passed).
 class AlwaysPassingAttestationVerifier : public AttestationVerifier {
  public:
   absl::StatusOr<VerificationResult> Verify(
-      const absl::Cord& access_policy,
-      const confidentialcompute::SignedEndorsements& signed_endorsements,
-      const google::internal::federatedcompute::v1::
-          ConfidentialEncryptionConfig& encryption_config) override;
+      const confidentialcompute::SignedPayload& pipeline_config,
+      const confidentialcompute::SignedPayload& encryption_key) override;
 };
 
 }  // namespace fcp::client::attestation

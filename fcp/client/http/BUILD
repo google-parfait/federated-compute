@@ -176,6 +176,7 @@ cc_library(
         "//fcp/protos/confidentialcompute:key_cc_proto",
         "//fcp/protos/confidentialcompute:payload_metadata_cc_proto",
         "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
+        "//fcp/protos/federatedcompute:confidential_encryption_config_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -217,6 +218,7 @@ cc_library(
         "//fcp/protos:population_eligibility_spec_cc_proto",
         "//fcp/protos/confidentialcompute:blob_header_cc_proto",
         "//fcp/protos/confidentialcompute:payload_metadata_cc_proto",
+        "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "//fcp/secagg/shared:cc_proto",
         "//fcp/testing",
@@ -237,7 +239,6 @@ cc_library(
         "@com_google_googletest//:gtest_for_library",
         "@com_google_protobuf//:any_cc_proto",
         "@com_google_protobuf//:duration_cc_proto",
-        "@oak//proto/attestation:endorsement_cc_proto",
     ],
 )
 
@@ -249,7 +250,6 @@ cc_test(
         ":http_federated_protocol",
         ":http_federated_protocol_test_utils",
         "//fcp/base:compression",
-        "//fcp/base:digest",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:event_time_range_cc_proto",
         "//fcp/client:federated_protocol",
@@ -267,6 +267,7 @@ cc_test(
         "//fcp/protos/confidentialcompute:blob_header_cc_proto",
         "//fcp/protos/confidentialcompute:payload_metadata_cc_proto",
         "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
+        "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "//fcp/secagg/shared:cc_proto",
         "@com_google_absl//absl/memory",
@@ -285,7 +286,6 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:any_cc_proto",
         "@com_google_protobuf//:duration_cc_proto",
-        "@oak//proto/attestation:endorsement_cc_proto",
     ],
 )
 

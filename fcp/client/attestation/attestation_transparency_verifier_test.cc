@@ -102,7 +102,7 @@ TEST(AttestationTransparencyVerifierTest,
      DefaultValuesDoNotVerifySuccessfully) {
   AttestationTransparencyVerifier verifier(AccessPolicyEndorsementOptions(),
                                            LogPrettyPrintedVerificationRecord);
-  EXPECT_THAT(verifier.Verify({}, {}, {}),
+  EXPECT_THAT(verifier.Verify({}, {}),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
@@ -127,7 +127,8 @@ TEST(AttestationTransparencyVerifierTest, Success) {
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->public_key, VariantWith<Key>(EqualsProto(public_key)));
   EXPECT_EQ(result->key_id, public_key.key_id());
@@ -163,7 +164,8 @@ TEST(AttestationTransparencyVerifierTest, SuccessWithSignatureChain) {
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->public_key, VariantWith<Key>(EqualsProto(public_key)));
   EXPECT_EQ(result->key_id, public_key.key_id());
@@ -193,7 +195,8 @@ TEST(AttestationTransparencyVerifierTest, RequireTransparencyLogEntry) {
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   EXPECT_THAT(result.status(),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(), HasSubstr("transparency log entry"));
@@ -224,7 +227,8 @@ TEST(AttestationTransparencyVerifierTest, InvalidPipelineConfigSignature) {
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   EXPECT_THAT(result.status(),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
@@ -248,7 +252,8 @@ TEST(AttestationTransparencyVerifierTest, InvalidPipelineConfig) {
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   EXPECT_THAT(result.status(),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
@@ -276,7 +281,8 @@ TEST(AttestationTransparencyVerifierTest, MismatchedAccessPolicySha256) {
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   EXPECT_THAT(result.status(),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
@@ -308,7 +314,8 @@ TEST(AttestationTransparencyVerifierTest, InvalidEncryptionKeySignature) {
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   EXPECT_THAT(result.status(),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
@@ -331,7 +338,8 @@ TEST(AttestationTransparencyVerifierTest, InvalidEncryptionKey) {
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   EXPECT_THAT(result.status(),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
@@ -362,7 +370,8 @@ TEST(AttestationTransparencyVerifierTest,
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   EXPECT_THAT(result.status(),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
@@ -392,7 +401,8 @@ TEST(AttestationTransparencyVerifierTest, MissingAccessPolicySha256) {
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   EXPECT_THAT(result.status(),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(
@@ -429,7 +439,8 @@ TEST(AttestationTransparencyVerifierTest,
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   EXPECT_THAT(result.status(),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
@@ -460,7 +471,8 @@ TEST(AttestationTransparencyVerifierTest, MissingClaimsInEncryptionKeyHeaders) {
 
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
-  auto result = verifier.Verify({}, signed_endorsements, encryption_config);
+  auto result = verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                encryption_config.encryption_key());
   EXPECT_THAT(result.status(),
               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(), HasSubstr("missing required claims"));
@@ -497,7 +509,8 @@ TEST(AttestationTransparencyVerifierTest,
           confidentialcompute::AttestationVerificationRecord record) {
         verification_record = record;
       });
-  ABSL_ASSERT_OK(verifier.Verify({}, signed_endorsements, encryption_config));
+  ABSL_ASSERT_OK(verifier.Verify(signed_endorsements.pipeline_configuration(),
+                                 encryption_config.encryption_key()));
 
   // Ensure that the verification record logger was called and provided the
   // relevant information.

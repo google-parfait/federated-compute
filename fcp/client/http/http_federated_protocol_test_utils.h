@@ -48,6 +48,7 @@
 #include "fcp/client/willow/willow_payload_encryptor.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
+#include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
@@ -59,7 +60,6 @@
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
 #include "fcp/testing/testing.h"
-#include "proto/attestation/endorsement.pb.h"
 
 namespace fcp::client::http::internal {
 
@@ -309,7 +309,6 @@ TaskAssignment CreateTaskAssignment(
     const std::string& aggregation_session_id, const std::string& task_name,
     const std::string& target_uri_prefix,
     int32_t minimum_clients_in_server_visible_aggregate,
-    std::optional<Resource> confidential_data_access_policy = std::nullopt,
     std::optional<Resource> signed_endorsements = std::nullopt,
     std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info =
         std::nullopt);
@@ -320,7 +319,6 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
     const std::string& aggregation_session_id,
     int32_t minimum_clients_in_server_visible_aggregate,
     const std::string& target_uri_prefix = kAggregationTargetUri,
-    std::optional<Resource> confidential_data_access_policy = std::nullopt,
     std::optional<Resource> signed_endorsements = std::nullopt,
     std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info =
         std::nullopt);
@@ -376,17 +374,15 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // max_number_of_clients, which are both required for encrypting the payload.
   absl::StatusOr<FederatedProtocol::CheckinResult> RunSuccessfulCheckin(
       bool report_eligibility_eval_result = true,
-      std::optional<std::string> confidential_data_access_policy = std::nullopt,
+      std::optional<std::string> signed_endorsements = std::nullopt,
       std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info =
           std::nullopt,
-      bool set_relative_uri = false,
-      std::optional<std::string> signed_endorsements = std::nullopt);
+      bool set_relative_uri = false);
 
   absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
   RunSuccessfulMultipleTaskAssignments(
       bool eligibility_eval_enabled = true,
       bool enable_confidential_aggregation = false,
-      std::optional<Resource> confidential_data_access_policy = std::nullopt,
       std::optional<Resource> signed_endorsements = std::nullopt);
 
   ReportResult RunSuccessfulUploadViaSimpleAgg(

@@ -2741,7 +2741,7 @@ TEST_F(FlRunnerExampleQueryTest, ConfidentialAggInSelectorContext) {
           Return(ByMove(std::make_unique<SimpleExampleIterator>(dataset_)))));
 
   FederatedProtocol::ConfidentialAggInfo confidential_agg_info = {
-      .data_access_policy = absl::Cord("data_access_policy")};
+      .signed_endorsements = absl::Cord("signed_endorsements")};
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{

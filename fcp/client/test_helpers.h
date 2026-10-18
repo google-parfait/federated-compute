@@ -1008,13 +1008,10 @@ class MockSecAggProtocolDelegate : public SecAggProtocolDelegate {
 
 class MockAttestationVerifier : public attestation::AttestationVerifier {
  public:
-  MOCK_METHOD(
-      absl::StatusOr<VerificationResult>, Verify,
-      (const absl::Cord& access_policy,
-       const confidentialcompute::SignedEndorsements& signed_endorsements,
-       const google::internal::federatedcompute::v1::
-           ConfidentialEncryptionConfig& encryption_config),
-      (override));
+  MOCK_METHOD(absl::StatusOr<VerificationResult>, Verify,
+              (const confidentialcompute::SignedPayload& pipeline_config,
+               const confidentialcompute::SignedPayload& encryption_key),
+              (override));
 };
 
 class MockTensorflowRunner : public TensorflowRunner {

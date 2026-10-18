@@ -58,6 +58,7 @@
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
+#include "fcp/protos/federatedcompute/confidential_encryption_config.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
@@ -180,14 +181,10 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     // Only set when the enable_confidential_aggregation() flag is enabled. If
     // the flag is disabled then this is unconditionally set to `kUnknown`.
     AggregationType aggregation_type;
-    // The serialized data access policy that will be used to govern access to
-    // to the data uploaded via the ConfidentialAggregations protocol. Only set
-    // when aggregation_type == kConfidentialAggregation.
-    std::optional<absl::Cord> confidential_data_access_policy;
-    // The signed endorsements that will be used to attest the data access
-    // policy above. Only set when aggregation_type == kConfidentialAggregation,
-    // and the task uses SignedEndorsements.
-    std::optional<absl::Cord> signed_endorsements;
+    // The serialized `fcp.confidentialcompute.SignedEndorsements` proto that
+    // will be used to attest the pipeline configuration. Only set when
+    // aggregation_type == kConfidentialAggregation.
+    std::optional<absl::Cord> confidential_pipeline_config_endorsements;
     // Information for Willow aggregation. Only set when aggregation_type ==
     // kWillowAggregation.
     std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info;
@@ -365,19 +362,12 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     const ::google::internal::federatedcompute::v1::Resource& plan;
     const ::google::internal::federatedcompute::v1::Resource& checkpoint;
     // While all tasks can have a plan and checkpoint Resource, only tasks
-    // using the confidential aggregation method have a confidential data
-    // access policy (for all other tasks this Resource proto will simply be
-    // empty, meaning nothing will be fetched and an empty Cord will be
-    // returned).
+    // using the confidential aggregation method have signed pipeline
+    // configuration endorsements (for all other tasks this Resource proto will
+    // simply be empty, meaning nothing will be fetched and an empty Cord will
+    // be returned).
     const ::google::internal::federatedcompute::v1::Resource&
-        confidential_data_access_policy;
-    // While all tasks can have a plan and checkpoint Resource, only tasks
-    // using the confidential aggregation method may have a signed
-    // endorsements (for all other tasks this Resource proto will simply be
-    // empty, meaning nothing will be fetched and an empty Cord will be
-    // returned).
-    const ::google::internal::federatedcompute::v1::Resource&
-        signed_endorsements;
+        confidential_pipeline_config_endorsements;
     // For tasks using Willow aggregation, this field contains the input spec.
     // For all other tasks, this field is empty, meaning that FetchTaskResources
     // will not fetch anything for this field.
@@ -385,16 +375,13 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   };
 
   // Represents fetched task resources, separating plan-and-checkpoint from
-  // the confidential data access policy, since the latter is only
-  // conditionally available.
+  // other conditionally available resources.
   struct FetchedTaskResources {
     PlanAndCheckpointPayloads plan_and_checkpoint_payloads;
-    // The serialized `fcp.confidentialcompute.DataAccessPolicy` proto, if the
-    // task has one, or an empty Cord if the task did not have one.
-    absl::Cord confidential_data_access_policy;
-    // The serialized `fcp.confidentialcompute.SignedEndorsements` proto, if
-    // the task has one, or an empty Cord if the task did not have one.
-    absl::Cord signed_endorsements;
+    // The serialized `fcp.confidentialcompute.SignedEndorsements` proto
+    // describing the endorsed pipeline configuration, if the task has one, or
+    // an empty Cord if the task did not have one.
+    absl::Cord confidential_pipeline_config_endorsements;
     // The serialized `secure_aggregation.willow.InputSpec` proto, if the task
     // has one, or an empty Cord if the task did not have one.
     absl::Cord willow_input_spec;
@@ -417,8 +404,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::StatusOr<InMemoryHttpResponse>& plan_data_response,
       absl::StatusOr<InMemoryHttpResponse>& checkpoint_data_response,
       absl::StatusOr<InMemoryHttpResponse>&
-          confidential_data_access_policy_response,
-      absl::StatusOr<InMemoryHttpResponse>& signed_endorsements_response,
+          confidential_pipeline_config_endorsements_response,
       absl::StatusOr<InMemoryHttpResponse>& willow_input_spec_response);
 
   // Helper function for fetching the Resources used by the protocol
