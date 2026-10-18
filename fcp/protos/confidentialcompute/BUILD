@@ -329,7 +329,6 @@ proto_library(
     srcs = ["signed_endorsements.proto"],
     deps = [
         ":payload_transparency_proto",
-        "@oak//proto/attestation:endorsement_proto",
     ],
 )
 

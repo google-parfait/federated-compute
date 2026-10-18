@@ -17,19 +17,13 @@ syntax = "proto3";
 package fcp.confidentialcompute;
 
 import "fcp/protos/confidentialcompute/payload_transparency.proto";
-import "proto/attestation/endorsement.proto";
 
 option java_multiple_files = true;
 option java_package = "com.google.intelligence.fcp.confidentialcompute";
 
 // A set of oak SignedEndorsement protos for the task
 message SignedEndorsements {
-  // A client must validate each SignedEndorsement with a corresponding
-  // EndorsementReferenceValue before allowing the client-held data to be
-  // uploaded.
-  // DEPRECATED: Clients now use the `pipeline_configuration` field.
-  repeated oak.attestation.v1.SignedEndorsement signed_endorsement = 1
-      [deprecated = true];
+  reserved 1;
 
   // A signed endorsement for the configuration of pipelines that are permitted
   // to process uploaded data. The payload will be a serialized
