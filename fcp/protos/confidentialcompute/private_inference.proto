@@ -42,7 +42,11 @@ message InferenceConfiguration {
 // all arguments, if no parameter is set, the default values as specified in the
 // TEE-hosted model engine will be used.
 message RuntimeConfig {
-  // The maximum number of characters in the prompt to be sent to the model.
+  // The maximum size of the prompt to be sent to the model, in UTF-8 bytes
+  // (not characters). A populated prompt longer than this is truncated from the
+  // end to the nearest UTF-8 code point boundary. Multi-byte characters (e.g.
+  // 3-byte CJK) consume more of this budget than their character count
+  // suggests, so size it accordingly for non-ASCII input.
   int32 max_prompt_size = 1;
   // The length of the sequence to be processed. Overrides the default value of
   // the chosen model engine if desired to process longer prompts at expense of
