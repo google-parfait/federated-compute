@@ -443,6 +443,10 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalNotConfiguredWithPopulationEligibilitySpec) {
+  EXPECT_CALL(mock_flags_,
+              include_content_binding_when_eligibility_policies_empty)
+      .WillRepeatedly(Return(false));
+
   Resource plan_resource;
   Resource checkpoint_resource;
 
@@ -489,10 +493,67 @@ TEST_F(HttpFederatedProtocolTest,
       mock_eet_received_callback_.AsStdFunction());
 
   ABSL_ASSERT_OK(eligibility_checkin_result);
-  EXPECT_THAT(
-      *eligibility_checkin_result,
-      VariantWith<FederatedProtocol::EligibilityEvalDisabled>(FieldsAre(
-          Optional(EqualsProto(expected_population_eligibility_spec)), _)));
+  EXPECT_THAT(*eligibility_checkin_result,
+              VariantWith<FederatedProtocol::EligibilityEvalDisabled>(FieldsAre(
+                  Optional(EqualsProto(expected_population_eligibility_spec)),
+                  IsEmpty())));
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestEligibilityEvalNotConfiguredWithEmptySpecIncludesContentBinding) {
+  EXPECT_CALL(mock_flags_,
+              include_content_binding_when_eligibility_policies_empty)
+      .WillRepeatedly(Return(true));
+
+  Resource plan_resource;
+  Resource checkpoint_resource;
+
+  PopulationEligibilitySpec expected_population_eligibility_spec;
+  auto* task_info = expected_population_eligibility_spec.add_task_info();
+  task_info->set_task_name("task_1");
+  task_info->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  std::string population_eligibility_spec_uri =
+      "https://fake.uri/population_eligibility_spec";
+  Resource population_eligibility_spec;
+  population_eligibility_spec.set_uri(population_eligibility_spec_uri);
+  std::string expected_execution_id = kEligibilityEvalExecutionId;
+  EligibilityEvalTaskResponse eval_task_response =
+      GetFakeEnabledEligibilityEvalTaskResponse(
+          plan_resource, checkpoint_resource, expected_execution_id,
+          kTaskAssignmentTargetUri, population_eligibility_spec);
+
+  InSequence seq;
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  EligibilityEvalTaskRequestMatcher(
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
+
+  EXPECT_CALL(mock_eet_received_callback_,
+              Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
+                             Eq(std::nullopt), _)));
+
+  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
+                                     population_eligibility_spec_uri,
+                                     HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          expected_population_eligibility_spec.SerializeAsString())));
+
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
+
+  ABSL_ASSERT_OK(eligibility_checkin_result);
+  EXPECT_THAT(*eligibility_checkin_result,
+              VariantWith<FederatedProtocol::EligibilityEvalDisabled>(FieldsAre(
+                  Optional(EqualsProto(expected_population_eligibility_spec)),
+                  kEligibilityEvalSessionId)));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 

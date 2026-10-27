@@ -206,6 +206,13 @@ class Flags {
   // return true, but then drop out if not enough data is returned during
   // execution.
   virtual bool drop_out_based_data_availability() const { return false; }
+
+  // If true, HttpFederatedProtocol populates content_binding with session_id
+  // when returning EligibilityEvalDisabled for a PopulationEligibilitySpec with
+  // no eligibility_policies.
+  virtual bool include_content_binding_when_eligibility_policies_empty() const {
+    return false;
+  }
 };
 }  // namespace client
 }  // namespace fcp

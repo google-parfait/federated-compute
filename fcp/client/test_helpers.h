@@ -715,6 +715,8 @@ class MockFlags : public Flags {
 
   MOCK_METHOD(bool, drop_out_based_data_availability, (), (const, override));
   MOCK_METHOD(bool, enable_private_logger, (), (const, override));
+  MOCK_METHOD(bool, include_content_binding_when_eligibility_policies_empty, (),
+              (const, override));
 };
 
 class MockOpStatsDb : public ::fcp::client::opstats::OpStatsDb {

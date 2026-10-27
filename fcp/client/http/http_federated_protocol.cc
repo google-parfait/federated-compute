@@ -599,9 +599,14 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
         // evaluate native policies.
         if (population_eligibility_spec.eligibility_policies_size() == 0) {
           object_state_ = ObjectState::kEligibilityEvalDisabled;
-          return EligibilityEvalDisabled{
+          EligibilityEvalDisabled disabled_result{
               .population_eligibility_spec =
                   std::move(population_eligibility_spec)};
+          if (flags_
+                  ->include_content_binding_when_eligibility_policies_empty()) {
+            disabled_result.content_binding = response_proto.session_id();
+          }
+          return disabled_result;
         } else {
           result.population_eligibility_spec =
               std::move(population_eligibility_spec);
