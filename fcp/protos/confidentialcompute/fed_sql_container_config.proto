@@ -86,7 +86,7 @@ message FedSqlContainerCommitConfiguration {
 enum AggCoreFinalizationType {
   FINALIZATION_TYPE_UNSPECIFIED = 0;
   // Return noised results from the checkpoint aggregator.
-  FINALIZATION_TYPE_REPORT = 1;
+  FINALIZATION_TYPE_REPORT = 1 [deprecated = true];
   // Return the serialized internal state of the checkpoint aggregator.
   FINALIZATION_TYPE_SERIALIZE = 2;
   // The below enums are used when output partitioning is enabled.
