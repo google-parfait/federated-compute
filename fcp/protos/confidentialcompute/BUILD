@@ -355,7 +355,6 @@ proto_library(
     srcs = ["access_policy_endorsement_options.proto"],
     deps = [
         ":key_proto",
-        "@oak//proto/attestation:reference_value_proto",
     ],
 )
 

@@ -3,55 +3,27 @@ syntax = "proto3";  // Our OSS build does not support editions.
 package fcp.confidentialcompute;
 
 import "fcp/protos/confidentialcompute/key.proto";
-import "proto/attestation/reference_value.proto";
 
 option java_package = "com.google.intelligence.fcp.confidentialcompute";
 option java_multiple_files = true;
 
 message AccessPolicyEndorsementOptions {
-  // Configuration for verifying a transparency log entries for
-  // `DataAccessPolicy` messages.
-  //
-  // This field will eventually be replaced by `kms_verifying_keys`,
-  // `access_policy_verifying_keys`, and `transparency_log_options`. Which set
-  // of fields is used will depend on client runtime flags and whether the
-  // server evidence uses the Attestation Transparency Service. During the
-  // transition, both sets of fields should be populated.
-  repeated oak.attestation.v1.EndorsementReferenceValue
-      endorsement_reference_values = 1;
-
-  // Configuration for verifying the hardware attestation of the server that
-  // produced the upload encryption key.
-  //
-  // This field will eventually be replaced by `kms_verifying_keys`,
-  // `access_policy_verifying_keys`, and `transparency_log_options`. Which set
-  // of fields is used will depend on client runtime flags and whether the
-  // server evidence uses the Attestation Transparency Service. During the
-  // transition, both sets of fields should be populated.
-  oak.attestation.v1.ReferenceValues public_key_reference_values = 5;
+  reserved 1, 5;
 
   // In order to be accepted, KMS TEE evidence must be signed by one of these
   // keys.
-  //
-  // This field only applies when using the Attestation Transparency Service.
   repeated Key kms_verifying_keys = 2;
 
   // In order to be accepted, a DataAccessPolicy must be signed by one of these
   // keys.
-  //
-  // This field only applies when using the Attestation Transparency Service.
   repeated Key access_policy_verifying_keys = 3;
 
   // Requirements for KMS and access policy artifacts to be included in a
   // transparency log.
-  //
-  // This field only applies when using the Attestation Transparency Service.
   TransparencyLogOptions transparency_log_options = 4;
 
   // Requirements for artifacts (e.g. TEE evidence or access policies) to be
   // included in a transparency log. Currently only Rekor is supported.
-  //
-  // These options only apply when using the Attestation Transparency Service.
   message TransparencyLogOptions {
     // If true, the upload encryption key and access policy must have an
     // endorsement in a transparency log. Setting this to false won't cause
