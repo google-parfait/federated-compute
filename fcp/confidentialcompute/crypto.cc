@@ -13,9 +13,11 @@
 // limitations under the License.
 #include "fcp/confidentialcompute/crypto.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <utility>
@@ -30,6 +32,7 @@
 #include "absl/status/status_builder.h"
 #include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
@@ -118,6 +121,33 @@ ProcessDecryptionKeys(const std::vector<absl::string_view>& decryption_keys) {
     processed_keys[key->key_id].push_back(std::move(hpke_key));
   }
   return processed_keys;
+}
+
+// Validates the symmetric key and initializes an EVP_AEAD_CTX for decryption.
+absl::StatusOr<bssl::UniquePtr<EVP_AEAD_CTX>> CreateAeadCtxForDecryption(
+    const EVP_AEAD* aead, absl::string_view symmetric_key) {
+  ABSL_ASSIGN_OR_RETURN(SymmetricKey key, SymmetricKey::Decode(symmetric_key));
+  absl::Cleanup key_cleanup = [&key]() {
+    OPENSSL_cleanse(key.k.data(), key.k.size());
+  };
+  if (key.algorithm != crypto_internal::kAeadAes128GcmSivFixedNonce) {
+    return absl::InvalidArgumentError("unsupported symmetric key algorithm ");
+  }
+  if (!key.key_ops.empty() &&
+      absl::c_find(key.key_ops, kCoseKeyOpDecrypt) == key.key_ops.end()) {
+    return absl::InvalidArgumentError(
+        "symmetric key disallows decrypt operation");
+  }
+
+  bssl::UniquePtr<EVP_AEAD_CTX> aead_ctx(
+      EVP_AEAD_CTX_new(aead, reinterpret_cast<const uint8_t*>(key.k.data()),
+                       key.k.size(), EVP_AEAD_DEFAULT_TAG_LENGTH));
+  if (aead_ctx == nullptr) {
+    return absl::StatusBuilder(absl::StatusCode::kInternal)
+           << "Failed to initialize EVP_AEAD_CTX: "
+           << ERR_reason_error_string(ERR_get_error());
+  }
+  return aead_ctx;
 }
 
 }  // namespace
@@ -304,27 +334,8 @@ absl::StatusOr<std::string> MessageDecryptor::Decrypt(
 absl::StatusOr<std::string> MessageDecryptor::DecryptReleasedResult(
     absl::string_view ciphertext, absl::string_view associated_data,
     absl::string_view symmetric_key) const {
-  ABSL_ASSIGN_OR_RETURN(SymmetricKey key, SymmetricKey::Decode(symmetric_key));
-  absl::Cleanup key_cleanup = [&key]() {
-    OPENSSL_cleanse(key.k.data(), key.k.size());
-  };
-  if (key.algorithm != crypto_internal::kAeadAes128GcmSivFixedNonce) {
-    return absl::InvalidArgumentError("unsupported symmetric key algorithm ");
-  }
-  if (!key.key_ops.empty() &&
-      absl::c_find(key.key_ops, kCoseKeyOpDecrypt) == key.key_ops.end()) {
-    return absl::InvalidArgumentError(
-        "symmetric key disallows decrypt operation");
-  }
-
-  bssl::UniquePtr<EVP_AEAD_CTX> aead_ctx(
-      EVP_AEAD_CTX_new(aead_, reinterpret_cast<const uint8_t*>(key.k.data()),
-                       key.k.size(), EVP_AEAD_DEFAULT_TAG_LENGTH));
-  if (aead_ctx == nullptr) {
-    return absl::StatusBuilder(absl::StatusCode::kInternal)
-           << "Failed to initialize EVP_AEAD_CTX: "
-           << ERR_reason_error_string(ERR_get_error());
-  }
+  ABSL_ASSIGN_OR_RETURN(bssl::UniquePtr<EVP_AEAD_CTX> aead_ctx,
+                        CreateAeadCtxForDecryption(aead_, symmetric_key));
   std::string plaintext(ciphertext.size(), '\0');
   size_t plaintext_len = 0;
   if (EVP_AEAD_CTX_open(
@@ -342,6 +353,59 @@ absl::StatusOr<std::string> MessageDecryptor::DecryptReleasedResult(
            << ERR_reason_error_string(ERR_get_error());
   }
   plaintext.resize(plaintext_len);
+  return plaintext;
+}
+
+absl::StatusOr<absl::Cord> MessageDecryptor::DecryptReleasedResult(
+    const absl::Cord& ciphertext, absl::string_view associated_data,
+    absl::string_view symmetric_key) const {
+  ABSL_ASSIGN_OR_RETURN(bssl::UniquePtr<EVP_AEAD_CTX> aead_ctx,
+                        CreateAeadCtxForDecryption(aead_, symmetric_key));
+
+  auto chunks = ciphertext.Chunks();
+  size_t num_chunks = std::distance(chunks.begin(), chunks.end());
+
+  std::vector<std::string> plaintext_chunks(num_chunks);
+  std::vector<CRYPTO_IOVEC> iovecs;
+  iovecs.reserve(num_chunks);
+  size_t i = 0;
+  for (absl::string_view chunk : ciphertext.Chunks()) {
+    plaintext_chunks[i].resize(chunk.size());
+    CRYPTO_IOVEC iovec;
+    iovec.in = reinterpret_cast<const uint8_t*>(chunk.data());
+    iovec.out = reinterpret_cast<uint8_t*>(plaintext_chunks[i].data());
+    iovec.len = chunk.size();
+    iovecs.push_back(iovec);
+    i++;
+  }
+
+  CRYPTO_IVEC aadvec[1];
+  aadvec[0].in = reinterpret_cast<const uint8_t*>(associated_data.data());
+  aadvec[0].len = associated_data.size();
+
+  size_t out_total_bytes = 0;
+  if (EVP_AEAD_CTX_openv(aead_ctx.get(), iovecs.data(), iovecs.size(),
+                         &out_total_bytes,
+                         reinterpret_cast<const uint8_t*>(kNonce.data()),
+                         kNonce.size(), aadvec, 1) != 1) {
+    for (auto& chunk : plaintext_chunks) {
+      OPENSSL_cleanse(chunk.data(), chunk.size());
+    }
+    return absl::StatusBuilder(absl::StatusCode::kInvalidArgument)
+           << "AEAD decryption failed: "
+           << ERR_reason_error_string(ERR_get_error());
+  }
+
+  // Keeps the first `out_total_bytes` across the plaintext chunks.
+  absl::Cord plaintext;
+  size_t remaining = out_total_bytes;
+  for (auto& chunk : plaintext_chunks) {
+    if (remaining == 0) break;
+    size_t chunk_size = std::min(chunk.size(), remaining);
+    chunk.resize(chunk_size);
+    plaintext.Append(std::move(chunk));
+    remaining -= chunk_size;
+  }
   return plaintext;
 }
 

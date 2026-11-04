@@ -38,6 +38,7 @@
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "fcp/protos/confidentialcompute/key.pb.h"
 #include "openssl/base.h"
@@ -176,6 +177,11 @@ class MessageDecryptor {
   // `MessageEncryptor::Encrypt` or an equivalent implementation.
   absl::StatusOr<std::string> DecryptReleasedResult(
       absl::string_view ciphertext, absl::string_view associated_data,
+      absl::string_view symmetric_key) const;
+
+  // Overload for absl::Cord.
+  absl::StatusOr<absl::Cord> DecryptReleasedResult(
+      const absl::Cord& ciphertext, absl::string_view associated_data,
       absl::string_view symmetric_key) const;
 
   // Unwraps a ReleaseToken using the decryption keys provided in the

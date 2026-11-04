@@ -28,6 +28,8 @@
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
+#include "absl/strings/cord_test_helpers.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/string_view.h"
 #include "fcp/confidentialcompute/cose.h"
@@ -909,6 +911,51 @@ TEST(CryptoTest, DecryptReleasedResult) {
   absl::StatusOr<std::string> decrypt_result =
       MessageDecryptor({}).DecryptReleasedResult(
           encrypt_result->ciphertext, associated_data, *symmetric_key);
+  ABSL_ASSERT_OK(decrypt_result);
+  EXPECT_EQ(*decrypt_result, message);
+}
+
+TEST(CryptoTest, DecryptReleasedResultCord) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "associated data";
+
+  // Encrypt the symmetric key with a known public key.
+  const EVP_HPKE_KEM* kem = EVP_hpke_x25519_hkdf_sha256();
+  const EVP_HPKE_KDF* kdf = EVP_hpke_hkdf_sha256();
+  const EVP_HPKE_AEAD* aead = EVP_hpke_aes_128_gcm();
+  std::string public_key;
+  bssl::ScopedEVP_HPKE_KEY private_key;
+  GenerateKeyPair(*kem, public_key, private_key);
+  absl::StatusOr<std::string> cwt = OkpCwt{
+      .public_key = OkpKey{
+          .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+          .key_ops = {kCoseKeyOpEncrypt},
+          .curve = crypto_internal::kX25519,
+          .x = public_key,
+      }}.Encode();
+  ABSL_ASSERT_OK(cwt);
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      MessageEncryptor().Encrypt(message, *cwt, associated_data);
+  ABSL_ASSERT_OK(encrypt_result);
+
+  // Unwrap the symmetric key.
+  absl::StatusOr<std::string> symmetric_key =
+      crypto_internal::UnwrapSymmetricKey(
+          private_key.get(), kdf, aead, encrypt_result->encrypted_symmetric_key,
+          encrypt_result->encapped_key, associated_data);
+  ABSL_ASSERT_OK(symmetric_key);
+
+  // Split ciphertext into multiple Cord chunks across both payload and tag.
+  std::vector<std::string> parts;
+  for (size_t i = 0; i < encrypt_result->ciphertext.size(); i += 5) {
+    parts.push_back(encrypt_result->ciphertext.substr(i, 5));
+  }
+  absl::Cord ciphertext_cord = absl::MakeFragmentedCord(parts);
+
+  // The fragmented Cord should be decryptable using the symmetric key.
+  absl::StatusOr<absl::Cord> decrypt_result =
+      MessageDecryptor({}).DecryptReleasedResult(
+          ciphertext_cord, associated_data, *symmetric_key);
   ABSL_ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
 }
