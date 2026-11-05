@@ -247,8 +247,21 @@ message BlobMetadata {
 
   // Metadata for plaintext encrypted with AEAD, with the symmetric key
   // then encrypted with HPKE.
+  //
+  // There are two separate associated data (AAD) values: one for the AEAD
+  // encryption of the plaintext (`ciphertext_associated_data`) and one for the
+  // HPKE encryption of the symmetric key
+  // (`kms_symmetric_key_associated_data.associated_metadata`). Both are
+  // authenticated: decryption fails if either is modified. Both are generally
+  // always set to the same bytes (typically a serialized
+  // `fcp.confidentialcompute.AssociatedMetadata` or
+  // `fcp.confidentialcompute.BlobHeader`), since encryption uses a single AAD
+  // for both operations (see `MessageEncryptor::Encrypt`).
   message HpkePlusAeadMetadata {
     // The associated data for the ciphertext.
+    //
+    // See the note above for more details on how this field relates to the
+    // `kms_symmetric_key_associated_data` field.
     bytes ciphertext_associated_data = 1;
 
     // The symmetric key used to encrypt the ciphertext, encrypted using HPKE.
@@ -258,6 +271,9 @@ message BlobMetadata {
     bytes encrypted_symmetric_key = 2;
 
     // The associated data for `encrypted_symmetric_key`.
+    //
+    // See the note above for more details on how this field relates to the
+    // `ciphertext_associated_data` field.
     oneof symmetric_key_associated_data_components {
       KmsAssociatedData kms_symmetric_key_associated_data = 8;
     }
@@ -274,7 +290,7 @@ message BlobMetadata {
       // `associated_metadata` below instead.
       bytes record_header = 1 [deprecated = true];
 
-      // Associated data (AAD) for decryption.
+      // Associated data (AAD) for decryption of the symmetric key.
       // The `value` (payload) bytes of the `Any` message contain the associated
       // data itself, while the `type_url` indicates how the payload is to be
       // parsed. Note that only the `value` bytes are used as AAD for
@@ -285,9 +301,9 @@ message BlobMetadata {
       google.protobuf.Any associated_metadata = 2;
     }
 
-    // The ID of the blob. This must match the ID in the blob's
-    // `fcp.confidentialcompute.BlobHeader`.
-    bytes blob_id = 7;
+    // Deprecated: do not use. Use the blob ID from the `BlobHeader` in
+    // `kms_symmetric_key_associated_data` instead. This field will be removed.
+    bytes blob_id = 7 [deprecated = true];
 
     // The COSE "kid" property (RFC 9052) of the asymmetric key used to
     // encrypt the symmetric key.
