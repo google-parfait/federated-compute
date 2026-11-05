@@ -85,11 +85,8 @@ message FedSqlContainerCommitConfiguration {
 // TODO: b/505099049 - Streamline the naming of these finalization types.
 enum AggCoreFinalizationType {
   FINALIZATION_TYPE_UNSPECIFIED = 0;
-  // Return noised results from the checkpoint aggregator.
-  FINALIZATION_TYPE_REPORT = 1 [deprecated = true];
   // Return the serialized internal state of the checkpoint aggregator.
   FINALIZATION_TYPE_SERIALIZE = 2;
-  // The below enums are used when output partitioning is enabled.
   // Return the partitioned internal state of the checkpoint aggregator
   // bundled with the budget tracking state.
   FINALIZATION_TYPE_PARTITION = 3;
@@ -103,6 +100,8 @@ enum AggCoreFinalizationType {
   // Returns the result of aggregation (e.g. with autotuning parameters)
   // bundled with the budget tracking state.
   FINALIZATION_TYPE_REPORT_AUTOTUNING_PARAMS = 7;
+
+  reserved 1;
 }
 
 // Configures how a result should be output by the trusted AggCore container.
