@@ -308,6 +308,24 @@ py_proto_library(
 )
 
 proto_library(
+    name = "dpsynth_config_proto",
+    srcs = ["dpsynth_config.proto"],
+    deps = [
+        ":access_policy_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "dpsynth_config_cc_proto",
+    deps = [":dpsynth_config_proto"],
+)
+
+py_proto_library(
+    name = "dpsynth_config_py_pb2",
+    deps = [":dpsynth_config_proto"],
+)
+
+proto_library(
     name = "sql_data_ingress_config_proto",
     srcs = ["sql_data_ingress_config.proto"],
     deps = [

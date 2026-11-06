@@ -1,0 +1,62 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fcp.confidentialcompute;
+
+import "fcp/protos/confidentialcompute/access_policy.proto";
+
+// Configures the dpsynth container initialization.
+message DpsynthContainerInitializeConfiguration {
+  // Required: YAML string defining the dataset domain/schema (produced via
+  // `dpsynth.to_yaml(schema)` and loaded inside the container via
+  // `dpsynth.from_yaml`).
+  string domain_yaml = 1;
+
+  // Optional: YAML string defining the `dpsynth.TabularConfig` (or
+  // `dpsynth.DiscreteConfig`) synthesis mechanism (produced via
+  // `dpsynth.to_yaml(config)` and loaded via `dpsynth.from_yaml`).
+  // If empty, defaults to `dpsynth.TabularConfig()` (which uses `MSTConfig`).
+  //
+  // Example:
+  //   type: TabularConfig
+  //   discrete_mechanism:
+  //     type: AIMConfig
+  //     max_rounds: 15
+  string mechanism_yaml = 2;
+}
+
+// Config constraints for the dpsynth container. They must be validated before
+// any of the blobs written to the container are processed.
+message DpsynthContainerConfigConstraints {
+  // Defines limits on the accesses to blobs.
+  AccessBudget access_budget = 1;
+
+  // The minimum size of the aggregation window in minutes (for time-based
+  // budget tracking).
+  uint64 min_agg_window_minutes = 2;
+
+  // Target differential privacy epsilon (must be > 0).
+  double epsilon = 3;
+
+  // Target differential privacy delta (must be >= 0, and > 0 for approximate
+  // DP mechanisms).
+  double delta = 4;
+
+  // Maximum number of records each privacy unit may contribute (defaults to 1
+  // if unset; must be >= 1). Used both to bound per-input rows and as
+  // `group_size` in `dpsynth.calibrate`.
+  optional int64 max_records_per_user = 5;
+}
