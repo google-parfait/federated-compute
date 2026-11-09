@@ -121,6 +121,7 @@ cc_test(
         "//fcp/base",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status:status_matchers",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],
 )

@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -28,6 +29,24 @@
 #include "google/protobuf/util/message_differencer.h"
 
 #include "fcp/testing/parse_text_proto.h"
+
+// Asserts that `rexpr` (an expression returning absl::StatusOr<T>) is OK and
+// assigns its value to `lhs`; otherwise fails the current test and returns.
+// `lhs` may be a declaration, e.g.:
+//
+//   FCP_ASSERT_OK_AND_ASSIGN(Tensor t, Tensor::Create(...));
+//
+#define FCP_ASSERT_OK_AND_ASSIGN(lhs, rexpr) \
+  FCP_ASSERT_OK_AND_ASSIGN_IMPL_(            \
+      FCP_TESTING_CONCAT_(_fcp_status_or_value, __LINE__), lhs, rexpr)
+
+#define FCP_ASSERT_OK_AND_ASSIGN_IMPL_(statusor, lhs, rexpr) \
+  auto statusor = (rexpr);                                   \
+  ASSERT_TRUE(statusor.ok()) << statusor.status();           \
+  lhs = *std::move(statusor)
+
+#define FCP_TESTING_CONCAT_INNER_(x, y) x##y
+#define FCP_TESTING_CONCAT_(x, y) FCP_TESTING_CONCAT_INNER_(x, y)
 
 // This file defines platform dependent utilities for testing,
 // based on the public version of googletest.

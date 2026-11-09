@@ -16,10 +16,14 @@
 
 #include "fcp/testing/testing.h"
 
+#include <memory>
+#include <string>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/flags/flag.h"
 #include "absl/status/status_matchers.h"
+#include "absl/status/statusor.h"
 #include "fcp/base/platform.h"
 #include "fcp/testing/test_messages.pb.h"
 
@@ -97,6 +101,25 @@ TEST(TestingTest, NotEqualsProtoMessageText) {
   testing::Bar bar;
   bar.set_bar(1);
   ASSERT_THAT(bar, Not(EqualsProto("bar: 2")));
+}
+
+TEST(TestingTest, AssertOkAndAssignDeclaration) {
+  FCP_ASSERT_OK_AND_ASSIGN(int value, absl::StatusOr<int>(42));
+  EXPECT_EQ(value, 42);
+}
+
+TEST(TestingTest, AssertOkAndAssignExistingVariable) {
+  std::string value;
+  FCP_ASSERT_OK_AND_ASSIGN(value, absl::StatusOr<std::string>("foo"));
+  EXPECT_EQ(value, "foo");
+}
+
+TEST(TestingTest, AssertOkAndAssignMoveOnly) {
+  FCP_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<int> value,
+      absl::StatusOr<std::unique_ptr<int>>(std::make_unique<int>(7)));
+  ASSERT_NE(value, nullptr);
+  EXPECT_EQ(*value, 7);
 }
 
 }  // namespace
