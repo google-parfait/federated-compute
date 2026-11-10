@@ -67,4 +67,4 @@ class VectorData<absl::string_view> : public TensorData {
 }  // namespace aggregation
 }  // namespace fcp
 
-#endif  // FCP_AGGREGATION_CORE_VECTOR_STRING_DATA_H_
+#endif  // FCP_AGGREGATION_CORE_VECTOR_DATA_H_
