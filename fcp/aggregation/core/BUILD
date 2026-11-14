@@ -92,6 +92,29 @@ cc_library(
 )
 
 cc_library(
+    name = "mutable_string_data",
+    hdrs = ["mutable_string_data.h"],
+    copts = FCP_COPTS,
+    deps = [
+        ":tensor",
+        "@com_google_absl//absl/container:fixed_array",
+    ],
+)
+
+cc_test(
+    name = "mutable_string_data_test",
+    srcs = ["mutable_string_data_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":mutable_string_data",
+        ":tensor",
+        "@com_google_absl//absl/status:status_matchers",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "aggregator",
     srcs = [
         "input_tensor_list.cc",

@@ -1,0 +1,414 @@
+/*
+ * Copyright 2023 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef FCP_AGGREGATION_GROUP_BY_GROUP_BY_AGGREGATOR_H_
+#define FCP_AGGREGATION_GROUP_BY_GROUP_BY_AGGREGATOR_H_
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
+#include "absl/status/status_macros.h"
+#include "absl/types/span.h"
+#include "fcp/aggregation/core/input_tensor_list.h"
+#include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_aggregator.h"
+#include "fcp/aggregation/core/tensor_aggregator_factory.h"
+#include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/core/tensor_slice_data.h"
+#include "fcp/aggregation/core/tensor_spec.h"
+#include "fcp/aggregation/group_by/composite_key_combiner.h"
+#include "fcp/aggregation/group_by/contributors_to_groups.h"
+#include "fcp/aggregation/group_by/group_by_state.pb.h"
+#include "fcp/aggregation/group_by/one_dim_grouping_aggregator.h"
+
+namespace fcp {
+namespace aggregation {
+
+// GroupByAggregator class is a specialization of TensorAggregator which
+// takes in a predefined number of tensors to be used as keys and and predefined
+// number of tensors to be used as values. It computes the unique combined keys
+// across all tensors and then accumulates the values into the output positions
+// matching those of the corresponding keys.
+//
+// Currently only 1D input tensors are supported.
+//
+// The specific means of accumulating values are delegated to an inner
+// OneDimGroupingAggregator intrinsic for each value tensor that should be
+// grouped.
+//
+// When Report is called, this TensorAggregator outputs all key types for which
+// the output_key_specs have a nonempty tensor name, as well as all value
+// tensors output by the OneDimGroupingAggregator intrinsics.
+//
+// This class is not thread safe.
+class GroupByAggregator : public TensorAggregator {
+ public:
+  // Validates the input tensors for Accumulate. Returns an InvalidArgument
+  // Status if the input tensors are not valid. Otherwise, returns an Ok Status.
+  absl::Status ValidateInputs(const InputTensorList& tensors) const override;
+
+  // Merge this GroupByAggregator with another GroupByAggregator that operates
+  // on compatible types using compatible inner intrinsics.
+  absl::Status MergeWith(TensorAggregator&& other) override;
+
+  // Returns the number of inputs that have been accumulated or merged into this
+  // GroupByAggregator.
+  int GetNumInputs() const override { return num_inputs_; }
+
+  // Returns the number of contributors that have contributed to each group. The
+  // reference is valid for the lifetime of this object.
+  const std::vector<int>& GetContributors() const {
+    return contributors_to_groups_.GetCounts();
+  }
+
+  // Override CanReport to ensure that outputs of Report will contain all
+  // expected output tensors. It is not valid to create empty tensors, so in
+  // order to produce a report containing the expected number of output tensors,
+  // at least one input must have been aggregated.
+  bool CanReport() const override;
+
+  // Override Report so that we can enforce k-thresholding if
+  // min_contributors_to_group_ is set.
+  absl::StatusOr<OutputTensorList> Report() && override;
+
+ protected:
+  friend class GroupByFactory;
+  friend class GroupByAggregatorPeer;
+
+  // Constructs a GroupByAggregator.
+  //
+  // This constructor is meant for use by the GroupByFactory; most callers
+  // should instead create a GroupByAggregator from an intrinsic using the
+  // factory, i.e.
+  // `(*GetAggregatorFactory("fedsql_group_by"))->Create(intrinsic)`
+  //
+  //
+  // Takes in the following inputs:
+  //
+  // input_key_specs: A vector of TensorSpecs for the tensors that this
+  // GroupByAggregator should treat as keys in the input. The first n tensors in
+  // any InputTensorList provided to an Accumulate call are expected to match
+  // the n TensorSpecs in this vector. For now the shape of each tensor should
+  // be {-1} as only one-dimensional aggregations are supported and different
+  // calls to Accumulate may have different numbers of examples in each tensor.
+  //
+  // output_key_specs: A vector of TensorSpecs providing this GroupByAggregator
+  // with information on which key tensors should be included in the output.
+  // An empty string for the tensor name indicates that the tensor should not
+  // be included in the output.
+  // Regardless of the output_key_specs, all key tensors listed in the
+  // input_key_specs will be used for grouping.
+  // output_key_specs must have the same number of TensorSpecs as
+  // input_key_specs, and all TensorSpec attributes but the tensor names must
+  // match those in input_key_specs. The lifetime of output_key_specs must
+  // outlast this class.
+  //
+  // intrinsics: Pointer to a vector of Intrinsic classes that should contain
+  // subclasses of OneDimGroupingAggregator to which this class will delegate
+  // grouping of values.
+  // The number of tensors in each InputTensorList provided to Accumulate must
+  // match the number of TensorSpecs in input_key_specs plus the number of
+  // Intrinsics in this vector.
+  //
+  // key_combiner: either nullptr or a smart pointer to a CompositeKeyCombiner.
+  //
+  // contributors_to_groups: a vector of ints representing the number of
+  // contributors to each group. Should be empty if `min_contributors_to_group`
+  // is not set.
+  //
+  // aggregators: a vector of unique_ptrs to TensorAggregators made by the
+  // factory. Used to perform the inner aggregations.
+  //
+  // num_inputs: the number of inputs initially represented by the aggregator.
+  //
+  // min_contributors_to_group: the minimum number of contributors before a
+  // group total can be released (i.e. the threshold for k-thresholding). If not
+  // set, no check will be made on the number of contributors to a group before
+  // release.
+  //
+  // max_contributors_to_group: the maximum number of contributors to a group
+  // to keep track of. Must not be set if `min_contributors_to_group` is not
+  // set. If not set (but `min_contributors_to_group` is set) then will be set
+  // to the same value as `min_contributors_to_group`.
+  //
+  // This class takes ownership of the intrinsics vector and the aggregators
+  // vector.
+  GroupByAggregator(
+      const std::vector<TensorSpec>& input_key_specs,
+      const std::vector<TensorSpec>* output_key_specs,
+      const std::vector<Intrinsic>* intrinsics,
+      std::unique_ptr<CompositeKeyCombiner> key_combiner,
+      std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators,
+      int num_inputs,
+      std::optional<int> min_contributors_to_group = std::nullopt,
+      std::vector<int> contributor_counts = {});
+
+  // Creates a vector of DataTypes that describe the keys in the input & output.
+  // A pre-processing function that sets the stage for CompositeKeyCombiners.
+  static std::vector<DataType> CreateKeyTypes(
+      size_t num_keys_per_input, const std::vector<TensorSpec>& input_key_specs,
+      const std::vector<TensorSpec>& output_key_specs);
+
+  // Perform aggregation of the tensors in a single InputTensorList into the
+  // state of this GroupByAggregator and increment the count of aggregated
+  // tensors.
+  //
+  // The order in which the tensors must appear in the input is the following:
+  // first, the key tensors in the order they appear in the input_tensor_specs,
+  // and next, the value tensors in the order the inner intrinsics that
+  // aggregate each value appear in the intrinsics input vector.
+  absl::Status AggregateTensors(InputTensorList tensors) override;
+
+  // Ensures that the output has not yet been consumed for this
+  // GroupByAggregator.
+  absl::Status CheckValid() const override;
+
+  // Produce final outputs from this GroupByAggregator. Keys will only be output
+  // for those tensors with nonempty tensor names in the output_key_specs_.
+  // Values will be output from all inner intrinsics.
+  //
+  // The order in which the tensors will appear in the output is the following:
+  // first, the keys with nonempty tensor names in the order they appear in the
+  // output_tensor_specs, and next, the value tensors in the order the inner
+  // intrinsics that produce each value tensor appear in the intrinsics input
+  // vector.
+  //
+  // Once this function is called, CheckValid will return false.
+  OutputTensorList TakeOutputs() && override;
+
+  // Increments the number of contributors to each of the groups represented by
+  // an ordinal in the ordinals tensor.
+  absl::Status AddOneContributor(const Tensor& ordinals);
+
+  // Increases the number of contributors (as recorded in
+  // contributors_to_groups_) to each of the groups represented by an
+  // ordinal in the ordinals tensor by the amount given in the corresponding
+  // entry of contributors.
+  absl::Status AddMultipleContributors(const Tensor& ordinals,
+                                       const std::vector<int>& contributors);
+
+  // The virtual function below enables a distinction between creating ordinals
+  // within MergeTensorsInternal and within AggregateTensorsInternal.
+  // Refer to CreateOrdinalsByGroupingKeys for the latter.
+  virtual absl::StatusOr<Tensor> CreateOrdinalsByGroupingKeysForMerge(
+      const InputTensorList& inputs);
+
+  absl::StatusOr<std::string> Serialize() && override;
+
+  absl::StatusOr<std::vector<std::string>> Partition(int num_partitions) &&
+      override;
+
+  inline size_t num_keys_per_input() const { return num_keys_per_input_; }
+  inline std::unique_ptr<CompositeKeyCombiner>& key_combiner() {
+    return key_combiner_;
+  }
+  inline const std::vector<Intrinsic>& intrinsics() const {
+    return intrinsics_;
+  }
+  inline const std::vector<TensorSpec>& output_key_specs() const {
+    return output_key_specs_;
+  }
+  inline const std::vector<int>& contributors_to_groups() const {
+    return contributors_to_groups_.GetCounts();
+  }
+  inline std::optional<int> min_contributors_to_group() const {
+    return min_contributors_to_group_;
+  }
+  inline std::optional<int> max_contributors_to_group() const {
+    return contributors_to_groups_.GetMaxContributorsToGroup();
+  }
+
+  inline absl::Status set_max_contributors_to_group(
+      int max_contributors_to_group) {
+    return contributors_to_groups_.IncreaseMaxContributorsToGroup(
+        max_contributors_to_group);
+  }
+
+  // Given a column of data and a set of survivor indices, shrink the column to
+  // only include the survivors.
+  template <typename OutputType>
+  static absl::Status ShrinkTensorSliceToSurvivors(
+      TensorSliceData& column,
+      const absl::flat_hash_set<size_t>& survivor_indices) {
+    ABSL_ASSIGN_OR_RETURN(absl::Span<OutputType> column_span,
+                          column.AsSpan<OutputType>());
+    size_t num_elements = column_span.size();
+    // Locate the smallest index of a non-survivor, then the first survivor
+    // after it.
+    int64_t destination;
+    for (destination = 0;
+         destination < num_elements && survivor_indices.contains(destination);
+         destination++) {
+    }
+    int64_t source;
+    for (source = destination + 1;
+         source < num_elements && !survivor_indices.contains(source);
+         source++) {
+    }
+    while (destination < num_elements && source < num_elements) {
+      // Swap to lengthen the prefix of survivors, then advance the destination
+      // and source indexes.
+      std::swap(column_span[destination], column_span[source]);
+      destination++;
+      for (source++;
+           source < num_elements && !survivor_indices.contains(source);
+           source++) {
+      }
+    }
+
+    // The number of survivors is equal to destination, check that survivor
+    // indices didn't contain entries outside of [0, num_elements).
+    if (destination != survivor_indices.size()) {
+      return absl::InvalidArgumentError(
+          "GroupByAggregator::ShrinkTensorSliceToSurvivors: "
+          "survivor_indices contained invalid indices.");
+    }
+
+    // Now that the survivors are in the front, reduce the byte size of the
+    // tensor to only include the survivors.
+    ABSL_RETURN_IF_ERROR(
+        column.ReduceByteSize(survivor_indices.size() * sizeof(OutputType)));
+    return absl::OkStatus();
+  }
+
+  // A form of histogram where the column data is in the mutable TensorSliceData
+  // format, along with the column data types and the number of rows metadata.
+  struct HistogramAsSliceData {
+    std::vector<std::unique_ptr<TensorSliceData>> column_data;
+    std::vector<DataType> column_dtypes;
+    size_t num_rows;
+  };
+
+  // Provides mutable access to the column data in the histogram.
+  static absl::StatusOr<HistogramAsSliceData> ConvertHistogramToSliceData(
+      OutputTensorList& histogram);
+
+  // Given a histogram represented as a list of TensorSliceData, shrink each
+  // column to only include the survivors.
+  static absl::StatusOr<OutputTensorList> ShrinkHistogramToSurvivors(
+      HistogramAsSliceData histogram,
+      const absl::flat_hash_set<size_t>& survivor_indices);
+
+ private:
+  // Returns either nullptr or a unique_ptr to a CompositeKeyCombiner, depending
+  // on the input specification. Relies on CreateKeyTypes.
+  static std::unique_ptr<CompositeKeyCombiner> CreateKeyCombiner(
+      const std::vector<TensorSpec>& input_key_specs,
+      const std::vector<TensorSpec>* output_key_specs);
+
+  // Checks that the input tensor at the provided index has the expected type
+  // and shape.
+  absl::Status ValidateIndexedTensor(const Tensor& tensor, size_t input_index,
+                                     DataType expected_dtype,
+                                     const TensorShape& expected_shape) const;
+
+  // Internal implementation to accumulate the input tensors into the state of
+  // this GroupByAggregator.
+  absl::Status AggregateTensorsInternal(InputTensorList tensors);
+
+  // Internal implementation to merge the input tensors into the state of this
+  // GroupByAggregator. The num_merged_inputs arg contains the number of inputs
+  // that were pre-accumulated into the tensors input param.
+  absl::Status MergeTensorsInternal(InputTensorList tensors,
+                                    int num_merged_inputs,
+                                    const std::vector<int>& other_contributors);
+
+  // Internal implementation of TakeOutputs that returns all keys and values,
+  // including keys that should not actually be returned in the final output.
+  // Once this function is called, CheckValid will return false.
+  OutputTensorList TakeOutputsInternal();
+
+  // If there are key tensors for this GroupByAggregator, then group key inputs
+  // into unique composite keys, and produce an ordinal for each element of the
+  // input corresponding to the index of the unique composite key in the output.
+  // Otherwise, produce an ordinals vector of the same shape as the inputs, but
+  // made up of all zeroes, so that all elements will be aggregated into a
+  // single output element.
+  absl::StatusOr<Tensor> CreateOrdinalsByGroupingKeys(
+      const InputTensorList& inputs);
+
+  // Returns OK if the input and output tensor specs of the intrinsics
+  // held by other match those of the sub-intrinsics held by this
+  // GroupByAggregator, and the data types of input keys and the TensorSpecs of
+  // output keys match those for this GroupByAggregator. Otherwise returns
+  // INVALID_ARGUMENT.
+  // TODO: b/280653641 - Also validate that intrinsic URIs match.
+  absl::Status IsCompatible(const GroupByAggregator& other) const;
+
+  bool output_consumed_ = false;
+  int num_inputs_;
+  const size_t num_keys_per_input_;
+  size_t num_tensors_per_input_;
+  std::unique_ptr<CompositeKeyCombiner> key_combiner_;
+  const std::vector<Intrinsic>& intrinsics_;
+  const std::vector<TensorSpec>& output_key_specs_;
+  std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators_;
+  std::optional<int> min_contributors_to_group_;
+  ContributorsToGroups contributors_to_groups_;
+};
+
+// Factory class for the GroupByAggregator.
+class GroupByFactory final : public TensorAggregatorFactory {
+ public:
+  GroupByFactory() = default;
+
+  // GroupByFactory isn't copyable or moveable.
+  GroupByFactory(const GroupByFactory&) = delete;
+  GroupByFactory& operator=(const GroupByFactory&) = delete;
+
+  absl::StatusOr<std::unique_ptr<TensorAggregator>> Create(
+      const Intrinsic& intrinsic) const override;
+
+  absl::StatusOr<std::unique_ptr<TensorAggregator>> Deserialize(
+      const Intrinsic& intrinsic, std::string serialized_state) const override;
+
+  // Check that the configuration is valid for SQL grouping aggregators.
+  static absl::Status CheckIntrinsic(const Intrinsic& intrinsic,
+                                     const char* uri);
+
+  // Create a vector of inner OneDimBaseGroupingAggregators. If state is
+  // provided, the inner aggregators will be constructed using their portion of
+  // the state.
+  static absl::StatusOr<
+      std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>>>
+  CreateAggregators(const Intrinsic& intrinsic,
+                    const GroupByAggregatorState* aggregator_state);
+
+  // Adds keys from the aggregator state, if any, to the composite key combiner.
+  static absl::Status PopulateKeyCombinerFromState(
+      CompositeKeyCombiner& key_combiner,
+      const GroupByAggregatorState& aggregator_state);
+
+ private:
+  // Create a GroupByAggregator. If state is provided, the GroupByAggregator
+  // will be constructed using the state.
+  absl::StatusOr<std::unique_ptr<TensorAggregator>> CreateInternal(
+      const Intrinsic& intrinsic,
+      const GroupByAggregatorState* aggregator_state) const;
+};
+
+}  // namespace aggregation
+}  // namespace fcp
+
+#endif  // FCP_AGGREGATION_GROUP_BY_GROUP_BY_AGGREGATOR_H_

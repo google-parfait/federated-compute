@@ -1,0 +1,86 @@
+/*
+ * Copyright 2025 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef FCP_AGGREGATION_GROUP_BY_PARTITIONER_H_
+#define FCP_AGGREGATION_GROUP_BY_PARTITIONER_H_
+
+#include <cstddef>
+#include <vector>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
+#include "fcp/aggregation/core/tensor.h"
+
+namespace fcp {
+namespace aggregation {
+
+// This class aims to partition the input data into multiple slices.
+// Internally it generates a vector of hashes from the key tensors and then uses
+// the generated hashes to partition the input data.
+class Partitioner {
+ public:
+  // Calculates hashes from the key tensors and creates a Partitioner instance.
+  static absl::StatusOr<Partitioner> Create(
+      const std::vector<Tensor>& key_tensors, int num_partitions);
+
+  // Partitions the input key tensor into multiple slices.
+  absl::StatusOr<std::vector<Tensor>> PartitionKeys(const Tensor& key_tensor);
+
+  // Partitions the input vector data into multiple slices.
+  template <typename T>
+  absl::StatusOr<std::vector<std::vector<T>>> PartitionData(
+      const std::vector<T>& data) const {
+    if (data.size() != hashes_.size()) {
+      return absl::InvalidArgumentError(
+          "The number of elements in the input data should be equal "
+          "to the number of hashes.");
+    }
+    return PartitionInternal<T>(data);
+  }
+
+  // Returns the number of partitions.
+  int GetNumPartitions() const { return num_partitions_; }
+
+ private:
+  Partitioner(std::vector<size_t> hashes, std::vector<int> partition_sizes)
+      : hashes_(hashes),
+        num_partitions_(partition_sizes.size()),
+        partition_sizes_(partition_sizes) {}
+
+  template <typename T>
+  std::vector<std::vector<T>> PartitionInternal(
+      absl::Span<const T> input) const {
+    std::vector<std::vector<T>> slices(num_partitions_);
+    for (int i = 0; i < num_partitions_; ++i) {
+      slices[i].reserve(partition_sizes_[i]);
+    }
+
+    for (int index = 0; index < input.size(); ++index) {
+      auto hashed_index = hashes_[index];
+      slices[hashed_index].push_back(input[index]);
+    }
+    return slices;
+  }
+
+  std::vector<size_t> hashes_;
+  int num_partitions_;
+  std::vector<int> partition_sizes_;
+};
+}  // namespace aggregation
+}  // namespace fcp
+
+#endif  // FCP_AGGREGATION_GROUP_BY_PARTITIONER_H_

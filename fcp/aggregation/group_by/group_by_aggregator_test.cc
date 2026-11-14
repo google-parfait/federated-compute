@@ -1,0 +1,2679 @@
+/*
+ * Copyright 2023 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "fcp/aggregation/group_by/group_by_aggregator.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/log/absl_check.h"
+#include "absl/status/status.h"
+#include "absl/status/status_macros.h"
+#include "absl/status/status_matchers.h"
+#include "absl/status/statusor.h"
+#include "fcp/aggregation/core/agg_vector.h"
+#include "fcp/aggregation/core/agg_vector_aggregator.h"
+#include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/input_tensor_list.h"
+#include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_aggregator.h"
+#include "fcp/aggregation/core/tensor_aggregator_registry.h"
+#include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/core/tensor_slice_data.h"
+#include "fcp/aggregation/core/tensor_spec.h"
+#include "fcp/aggregation/testing/test_data.h"
+#include "fcp/aggregation/testing/testing.h"
+#include "fcp/testing/testing.h"
+
+namespace fcp {
+namespace aggregation {
+
+class GroupByAggregatorPeer {
+ public:
+  explicit GroupByAggregatorPeer(std::unique_ptr<TensorAggregator> aggregator) {
+    auto* raw_ptr = dynamic_cast<GroupByAggregator*>(aggregator.get());
+    ABSL_CHECK(raw_ptr != nullptr) << "Aggregator must be a GroupByAggregator";
+    aggregator_ = std::unique_ptr<GroupByAggregator>(
+        dynamic_cast<GroupByAggregator*>(aggregator.release()));
+  }
+
+  absl::Status AddOneContributor(Tensor ordinals) {
+    return aggregator_->AddOneContributor(std::move(ordinals));
+  }
+
+  absl::Status AddMultipleContributors(Tensor ordinals,
+                                       std::vector<int> num_contributors) {
+    return aggregator_->AddMultipleContributors(ordinals, num_contributors);
+  }
+
+  const std::vector<int>& GetContributors() const {
+    return aggregator_->GetContributors();
+  }
+
+  template <typename OutputType>
+  static absl::Status ShrinkTensorSliceToSurvivors(
+      TensorSliceData& column,
+      const absl::flat_hash_set<size_t>& survivor_indices) {
+    return GroupByAggregator::ShrinkTensorSliceToSurvivors<OutputType>(
+        column, survivor_indices);
+  }
+
+  static absl::StatusOr<GroupByAggregator::HistogramAsSliceData>
+  ConvertHistogramToSliceData(OutputTensorList& histogram) {
+    return GroupByAggregator::ConvertHistogramToSliceData(histogram);
+  }
+
+  static absl::StatusOr<OutputTensorList> ShrinkHistogramToSurvivors(
+      GroupByAggregator::HistogramAsSliceData histogram_as_slice_data,
+      const absl::flat_hash_set<size_t>& survivor_indices) {
+    return GroupByAggregator::ShrinkHistogramToSurvivors(
+        std::move(histogram_as_slice_data), survivor_indices);
+  }
+
+  // Serializes and then deserializes the aggregator. Used to test serialization
+  // and deserialization preserve state in tests using a peer.
+  absl::Status SerializeAndDeserialize(const Intrinsic& intrinsic) {
+    ABSL_ASSIGN_OR_RETURN(std::string serialized_state,
+                          std::move(*aggregator_).Serialize());
+    ABSL_ASSIGN_OR_RETURN(auto factory, GetAggregatorFactory(intrinsic.uri));
+    ABSL_ASSIGN_OR_RETURN(
+        auto deserialized_aggregator,
+        factory->Deserialize(intrinsic, std::move(serialized_state)));
+    GroupByAggregator* aggregator_raw_ptr =
+        dynamic_cast<GroupByAggregator*>(deserialized_aggregator.get());
+
+    // Check if the cast failed before transferring ownership to be cautious
+    // around potential memory leaks.
+    if (aggregator_raw_ptr == nullptr) {
+      return absl::InternalError(
+          "Failed to cast deserialized aggregator to GroupByAggregator");
+    }
+    deserialized_aggregator.release();
+    aggregator_.reset(aggregator_raw_ptr);
+
+    return absl::OkStatus();
+  }
+
+ private:
+  std::unique_ptr<GroupByAggregator> aggregator_;
+};
+
+namespace {
+
+using ::absl_testing::IsOk;
+using ::absl_testing::IsOkAndHolds;
+using ::absl_testing::StatusIs;
+using ::testing::ContainerEq;
+using ::testing::ElementsAre;
+using ::testing::Eq;
+using ::testing::HasSubstr;
+using ::testing::IsEmpty;
+using ::testing::IsFalse;
+using ::testing::IsTrue;
+using ::testing::TestWithParam;
+using ::testing::UnorderedElementsAre;
+
+using GroupByAggregatorTest = TestWithParam<bool>;
+
+TensorSpec CreateTensorSpec(std::string name, DataType dtype) {
+  return TensorSpec(name, dtype, {-1});
+}
+
+// A simple Sum Aggregator
+template <typename T>
+class SumAggregator final : public AggVectorAggregator<T> {
+ public:
+  using AggVectorAggregator<T>::AggVectorAggregator;
+  using AggVectorAggregator<T>::data;
+
+  // Serialization is specific to each aggregation intrinsic and isn't
+  // exercised by these tests.
+  absl::StatusOr<std::string> Serialize() && override {
+    return absl::UnimplementedError("SumAggregator::Serialize");
+  }
+
+ private:
+  void AggregateVector(const AggVector<T>& agg_vector) override {
+    // This aggregator is not expected to actually be used for aggregating
+    // in the current tests.
+    ASSERT_TRUE(false);
+  }
+};
+
+Intrinsic CreateDefaultInnerIntrinsic(DataType input_dtype,
+                                      DataType output_dtype) {
+  return Intrinsic{"GoogleSQL:sum",
+                   {CreateTensorSpec("value", input_dtype)},
+                   {CreateTensorSpec("value", output_dtype)},
+                   {},
+                   {}};
+}
+
+Intrinsic CreateDefaultIntrinsic() {
+  Intrinsic intrinsic{"fedsql_group_by",
+                      {CreateTensorSpec("key", DT_STRING)},
+                      {CreateTensorSpec("key_out", DT_STRING)},
+                      {},
+                      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  return intrinsic;
+}
+
+// Creates a default intrinsic and adds the min_contributors_to_group
+// parameter.
+Intrinsic CreateIntrinsicWithMinContributors(int min_contributors) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  intrinsic.parameters.push_back(
+      Tensor(min_contributors, "min_contributors_to_group"));
+  return intrinsic;
+}
+
+template <typename KeyType, typename ValueType>
+struct KeyValuePair {
+  KeyType key;
+  ValueType value;
+
+  // Define the equality operator to be able to use UnorderedElementsAre
+  bool operator==(const KeyValuePair& other) const {
+    return key == other.key && value == other.value;
+  }
+};
+
+// Helper function to convert output tensors to a vector of key-value pairs.
+template <typename KeyType, typename ValueType>
+absl::StatusOr<std::vector<KeyValuePair<KeyType, ValueType>>>
+TensorsToKeyValuePairs(const Tensor& keys_tensor, const Tensor& values_tensor) {
+  std::vector<KeyValuePair<KeyType, ValueType>> result;
+  auto keys = keys_tensor.AsSpan<KeyType>();
+  auto values = values_tensor.AsSpan<ValueType>();
+  if (keys.size() != values.size()) {
+    return absl::InvalidArgumentError(
+        "Keys and values tensors must have the same size.");
+  }
+  for (size_t i = 0; i < keys.size(); ++i) {
+    result.push_back({
+        keys[i],
+        values[i],
+    });
+  }
+  return result;
+}
+
+// Helper function to convert output tensors to a vector of key-value pairs
+// when there are multiple value tensors.
+template <typename KeyType, typename ValueType>
+absl::StatusOr<std::vector<std::vector<KeyValuePair<KeyType, ValueType>>>>
+TensorsToMultipleKeyValuePairs(const Tensor& keys_tensor,
+                               const std::vector<Tensor>& values_tensors) {
+  std::vector<std::vector<KeyValuePair<KeyType, ValueType>>> result;
+  auto keys = keys_tensor.AsSpan<KeyType>();
+  for (const auto& values_tensor : values_tensors) {
+    std::vector<KeyValuePair<KeyType, ValueType>> pairs;
+    auto values = values_tensor.AsSpan<ValueType>();
+    if (keys.size() != values.size()) {
+      return absl::InvalidArgumentError(
+          "Keys and values tensors must have the same size.");
+    }
+    for (size_t i = 0; i < keys.size(); ++i) {
+      pairs.push_back({keys[i], values[i]});
+    }
+    result.push_back(std::move(pairs));
+  }
+  return result;
+}
+
+TEST_P(GroupByAggregatorTest, EmptyReport) {
+  // Intrinsic lifetime must outlast that of the TensorAggregator.
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0], IsTensor<string_view>({0}, {}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({0}, {}));
+}
+
+TEST_P(GroupByAggregatorTest, ScalarAggregation_Succeeds) {
+  // Intrinsic lifetime must outlast that of the TensorAggregator.
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key("key_string");
+  Tensor t1(1);
+  Tensor t2(2);
+  Tensor t3(3);
+  EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t2}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t3}), IsOk());
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0], IsTensor<string_view>({1}, {"key_string"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({1}, {6}));
+}
+
+TEST_P(GroupByAggregatorTest, AggregateOnlyEmptyTensorsSucceeds) {
+  // Intrinsic lifetime must outlast that of the TensorAggregator.
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key(std::vector<std::string>{});
+  Tensor t1(std::vector<int32_t>{});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0], IsTensor<string_view>({0}, {}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({0}, {}));
+}
+
+TEST_P(GroupByAggregatorTest, DenseAggregation_Succeeds) {
+  const TensorShape shape = {4};
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor keys({"zero", "one", "two", "three"});
+  Tensor t1({1, 3, 15, 27});
+  Tensor t2({10, 5, 1, 2});
+  Tensor t3({3, 11, 7, 20});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t1}), IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t2}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t3}), IsOk());
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result->size(), Eq(2));
+  // Verify the resulting tensors.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>(shape, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>(shape, {14, 19, 23, 49}));
+  // Also ensure that the resulting tensors are dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+  EXPECT_TRUE(result.value()[1].is_dense());
+}
+
+TEST_P(GroupByAggregatorTest, AccumulateEmptyInputDoesNotAffectResult) {
+  const TensorShape shape = {4};
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor keys({"zero", "one", "two", "three"});
+  Tensor t1({1, 3, 15, 27});
+  Tensor t2({10, 5, 1, 2});
+  Tensor t3({3, 11, 7, 20});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t1}), IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t2}), IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t3}), IsOk());
+
+  // Now accumulate an empty input. This will increase NumInputs to 4 but
+  // otherwise has no effect on the result.
+  Tensor empty_keys(std::vector<std::string>{});
+  Tensor empty_tensor(std::vector<int32_t>{});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&empty_keys, &empty_tensor}),
+              IsOk());
+
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(4));
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result->size(), Eq(2));
+  // Verify the resulting tensors.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>(shape, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>(shape, {14, 19, 23, 49}));
+  // Also ensure that the resulting tensors are dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+  EXPECT_TRUE(result.value()[1].is_dense());
+}
+
+TEST_P(GroupByAggregatorTest, DifferentKeysPerAccumulate_Succeeds) {
+  const TensorShape shape = {4};
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor keys1({"zero", "zero", "one", "two"});
+  Tensor t1({1, 3, 15, 27});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys1, &t1}), IsOk());
+  // Totals: [4, 15, 27]
+  Tensor keys2({"one", "zero", "one", "three"});
+  Tensor t2({10, 5, 1, 2});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys2, &t2}), IsOk());
+  // Totals: [9, 26, 27, 2]
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  Tensor keys3({"two", "two", "four", "one"});
+  Tensor t3({3, 11, 7, 20});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys3, &t3}), IsOk());
+  // Totals: [9, 46, 41, 2, 7]
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensors.
+  EXPECT_THAT(
+      result.value()[0],
+      IsTensor<string_view>({5}, {"zero", "one", "two", "three", "four"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({5}, {9, 46, 41, 2, 7}));
+}
+
+TEST_P(GroupByAggregatorTest, DifferentShapesPerAccumulate_Succeeds) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1({"zero", "one"});
+  Tensor t1({1, 3});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys1, &t1}), IsOk());
+  // Totals: [1, 3]
+  Tensor keys2({"two", "one", "zero", "one", "three", "two"});
+  Tensor t2({10, 5, 1, 2, 4, 9});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys2, &t2}), IsOk());
+  // Totals: [2, 10, 19, 4]
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  Tensor keys3({"two", "two", "one", "zero", "four"});
+  Tensor t3({3, 11, 7, 6, 3});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys3, &t3}), IsOk());
+  // Totals: [8, 17, 33, 4, 3]
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensors.
+  EXPECT_THAT(
+      result.value()[0],
+      IsTensor<string_view>({5}, {"zero", "one", "two", "three", "four"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({5}, {8, 17, 33, 4, 3}));
+}
+
+TEST_P(GroupByAggregatorTest, Accumulate_MultipleValueTensors_Succeeds) {
+  const TensorShape shape = {4};
+  Intrinsic intrinsic{"fedsql_group_by",
+                      {CreateTensorSpec("key", DT_STRING)},
+                      {CreateTensorSpec("key_out", DT_STRING)},
+                      {},
+                      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1({"zero", "zero", "one", "two"});
+  Tensor tA1({1, 3, 15, 27});
+  Tensor tB1({14, 11, 7, 14});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys1, &tA1, &tB1}), IsOk());
+  // Totals: [4, 15, 27], [25, 7, 14]
+  Tensor keys2({"one", "zero", "one", "three"});
+  Tensor tA2({10, 5, 1, 2});
+  Tensor tB2({1, 3, 2, 8});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys2, &tA2, &tB2}), IsOk());
+  // Totals: [9, 26, 27, 2], [28, 10, 14, 8]
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2));
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(3));
+  // Verify the resulting tensors.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({4}, {9, 26, 27, 2}));
+  EXPECT_THAT(result.value()[2], IsTensor<int64_t>({4}, {28, 10, 14, 8}));
+}
+
+TEST_P(GroupByAggregatorTest, Accumulate_NoValueTensors_Succeeds) {
+  Intrinsic intrinsic{"fedsql_group_by",
+                      {CreateTensorSpec("key", DT_STRING)},
+                      {CreateTensorSpec("key_out", DT_STRING)},
+                      {},
+                      {}};
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1({"zero", "zero", "one", "two"});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys1}), IsOk());
+  Tensor keys2({"one", "zero", "one", "three"});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys2}), IsOk());
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2));
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(1));
+  // Verify the resulting tensors.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
+}
+
+TEST_P(GroupByAggregatorTest, Accumulate_MultipleKeyTensors_Succeeds) {
+  Intrinsic intrinsic{"fedsql_group_by",
+                      {CreateTensorSpec("key1", DT_STRING),
+                       CreateTensorSpec("key2", DT_STRING)},
+                      {CreateTensorSpec("key1_out", DT_STRING),
+                       CreateTensorSpec("key2_out", DT_STRING)},
+                      {},
+                      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor sizeKeys1({"large", "large", "small", "large"});
+  Tensor animalKeys1({"cat", "cat", "cat", "dog"});
+  Tensor t1({1, 3, 15, 27});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&sizeKeys1, &animalKeys1, &t1}),
+              IsOk());
+  // Totals: [4, 15, 27]
+  Tensor sizeKeys2({"small", "large", "small", "small"});
+  Tensor animalKeys2({"cat", "cat", "cat", "dog"});
+  Tensor t2({10, 5, 1, 2});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&sizeKeys2, &animalKeys2, &t2}),
+              IsOk());
+  // Totals: [9, 26, 27, 2]
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  Tensor sizeKeys3({"large", "large", "small", "small"});
+  Tensor animalKeys3({"dog", "dog", "rabbit", "cat"});
+  Tensor t3({3, 11, 7, 20});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&sizeKeys3, &animalKeys3, &t3}),
+              IsOk());
+  // Totals: [9, 46, 41, 2, 7]
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(3));
+  // Verify the resulting tensors.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>(
+                  {5}, {"large", "small", "large", "small", "small"}));
+  EXPECT_THAT(
+      result.value()[1],
+      IsTensor<string_view>({5}, {"cat", "cat", "dog", "dog", "rabbit"}));
+  EXPECT_THAT(result.value()[2], IsTensor<int64_t>({5}, {9, 46, 41, 2, 7}));
+}
+
+TEST_P(GroupByAggregatorTest,
+       Accumulate_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
+  Intrinsic intrinsic{
+      "fedsql_group_by",
+      {CreateTensorSpec("key1", DT_STRING),
+       CreateTensorSpec("key2", DT_STRING)},
+      // An empty string in the output keys means that the
+      // key should not be included in the output.
+      {CreateTensorSpec("", DT_STRING), CreateTensorSpec("animals", DT_STRING)},
+      {},
+      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+
+  Tensor sizeKeys1({"large", "large", "small", "large"});
+  Tensor animalKeys1({"cat", "cat", "cat", "dog"});
+  Tensor t1({1, 3, 15, 27});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&sizeKeys1, &animalKeys1, &t1}),
+              IsOk());
+  // Totals: [4, 15, 27]
+  Tensor sizeKeys2({"small", "large", "small", "small"});
+  Tensor animalKeys2({"cat", "cat", "cat", "dog"});
+  Tensor t2({10, 5, 1, 2});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&sizeKeys2, &animalKeys2, &t2}),
+              IsOk());
+  // Totals: [9, 26, 27, 2]
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2));
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  // Verify the resulting tensors.
+  // Only the second key tensor should be included in the output.
+  EXPECT_THAT(result.value().size(), Eq(2));
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"cat", "cat", "dog", "dog"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({4}, {9, 26, 27, 2}));
+}
+
+TEST_P(GroupByAggregatorTest,
+       MultipleKeyTensorsSomeKeysNotInOutputSucceedsWhenAllInputsEmpty) {
+  Intrinsic intrinsic{
+      "fedsql_group_by",
+      {CreateTensorSpec("key1", DT_STRING),
+       CreateTensorSpec("key2", DT_STRING)},
+      // An empty string in the output keys means that the
+      // key should not be included in the output.
+      {CreateTensorSpec("", DT_STRING), CreateTensorSpec("animals", DT_STRING)},
+      {},
+      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+
+  Tensor size_keys(std::vector<std::string>{});
+  Tensor animal_keys(std::vector<std::string>{});
+  Tensor t(std::vector<int32_t>{});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&size_keys, &animal_keys, &t}),
+              IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&size_keys, &animal_keys, &t}),
+              IsOk());
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2));
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  // Verify the resulting tensors, which should be empty.
+  // Only the second key tensor should be included in the output.
+  EXPECT_THAT(result.value().size(), Eq(2));
+  EXPECT_THAT(result.value()[0], IsTensor<string_view>({0}, {}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({0}, {}));
+}
+
+TEST_P(GroupByAggregatorTest, Accumulate_NoKeyTensors) {
+  Intrinsic intrinsic{"fedsql_group_by", {}, {}, {}, {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+
+  Tensor t1({1, 3, 15, 27});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&t1}), IsOk());
+  Tensor t2({10, 5, 1});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&t2}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  Tensor t3({3, 11, 7, 20, 5});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&t3}), IsOk());
+
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value().size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor<int64_t>({1}, {108}));
+}
+
+TEST_P(GroupByAggregatorTest, Merge_Succeeds) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor key("foo");
+  Tensor t1(1);
+  Tensor t2(2);
+  Tensor t3(3);
+  Tensor t4(4);
+  Tensor t5(5);
+  EXPECT_THAT(aggregator1->Accumulate({&key, &t1}), IsOk());
+  EXPECT_THAT(aggregator1->Accumulate({&key, &t2}), IsOk());
+  EXPECT_THAT(aggregator2->Accumulate({&key, &t3}), IsOk());
+  EXPECT_THAT(aggregator2->Accumulate({&key, &t4}), IsOk());
+  EXPECT_THAT(aggregator2->Accumulate({&key, &t5}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(5));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  EXPECT_THAT(result.value()[0], IsTensor<string_view>({1}, {"foo"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({1}, {15}));
+}
+
+TEST_P(GroupByAggregatorTest, Merge_MultipleValueTensors_Succeeds) {
+  const TensorShape shape = {4};
+  Intrinsic intrinsic{"fedsql_group_by",
+                      {CreateTensorSpec("key", DT_STRING)},
+                      {CreateTensorSpec("key_out", DT_STRING)},
+                      {},
+                      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1({"zero", "zero", "one", "two"});
+  Tensor tA1({1, 3, 15, 27});
+  Tensor tB1({14, 11, 7, 14});
+  EXPECT_THAT(aggregator1->Accumulate({&keys1, &tA1, &tB1}), IsOk());
+  // Totals: [4, 15, 27], [25, 7, 14]
+  Tensor keys2({"one", "zero", "one", "three"});
+  Tensor tA2({10, 5, 1, 2});
+  Tensor tB2({1, 3, 2, 8});
+  EXPECT_THAT(aggregator1->Accumulate({&keys2, &tA2, &tB2}), IsOk());
+  // aggregator1 totals: [9, 26, 27, 2], [28, 10, 14, 8]
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(2));
+
+  // Create a second aggregator and accumulate an input with overlapping
+  // keys.
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+  Tensor keys3({"three", "two", "three", "two"});
+  Tensor tA3({11, 3, 4, 2});
+  Tensor tB3({6, 1, 4, 12});
+  EXPECT_THAT(aggregator2->Accumulate({&keys3, &tA3, &tB3}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge the two aggregators together.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(3));
+  // Verify the resulting tensors.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({4}, {9, 26, 32, 17}));
+  EXPECT_THAT(result.value()[2], IsTensor<int64_t>({4}, {28, 10, 27, 18}));
+}
+
+TEST_P(GroupByAggregatorTest, Merge_NoValueTensors_Succeeds) {
+  Intrinsic intrinsic{"fedsql_group_by",
+                      {CreateTensorSpec("key", DT_STRING)},
+                      {CreateTensorSpec("key_out", DT_STRING)},
+                      {},
+                      {}};
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1({"zero", "zero", "one", "two"});
+  EXPECT_THAT(aggregator1->Accumulate({&keys1}), IsOk());
+  Tensor keys2({"one", "zero", "one", "three"});
+  EXPECT_THAT(aggregator1->Accumulate({&keys2}), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(2));
+
+  // Create a second aggregator and accumulate an input with overlapping
+  // keys.
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+  Tensor keys3({"three", "two", "three", "two"});
+  EXPECT_THAT(aggregator2->Accumulate({&keys3}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge the two aggregators together.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(1));
+  // Verify the resulting tensors.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
+}
+
+TEST_P(GroupByAggregatorTest, Merge_MultipleKeyTensors_Succeeds) {
+  Intrinsic intrinsic{"fedsql_group_by",
+                      {CreateTensorSpec("key1", DT_STRING),
+                       CreateTensorSpec("key2", DT_STRING)},
+                      {CreateTensorSpec("key1_out", DT_STRING),
+                       CreateTensorSpec("key2_out", DT_STRING)},
+                      {},
+                      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  Tensor sizeKeys1({"large", "large", "small", "large"});
+  Tensor animalKeys1({"cat", "cat", "cat", "dog"});
+  Tensor t1({1, 3, 15, 27});
+  EXPECT_THAT(aggregator1->Accumulate({&sizeKeys1, &animalKeys1, &t1}), IsOk());
+  // aggregator1 totals: [4, 15, 27]
+  Tensor sizeKeys2({"small", "large", "small", "small"});
+  Tensor animalKeys2({"cat", "cat", "cat", "dog"});
+  Tensor t2({10, 5, 1, 2});
+  EXPECT_THAT(aggregator1->Accumulate({&sizeKeys2, &animalKeys2, &t2}), IsOk());
+  // aggregator1 totals: [9, 26, 27, 2]
+
+  // Create a second GroupByAggregator.
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+  Tensor sizeKeys3({"large", "large", "small", "small"});
+  Tensor animalKeys3({"dog", "dog", "rabbit", "cat"});
+  Tensor t3({3, 11, 7, 20});
+  EXPECT_THAT(aggregator2->Accumulate({&sizeKeys3, &animalKeys3, &t3}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge the two aggregators together.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  // Merged totals: [9, 46, 41, 2, 7]
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(3));
+  // Verify the resulting tensors.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>(
+                  {5}, {"large", "small", "large", "small", "small"}));
+  EXPECT_THAT(
+      result.value()[1],
+      IsTensor<string_view>({5}, {"cat", "cat", "dog", "dog", "rabbit"}));
+  EXPECT_THAT(result.value()[2], IsTensor<int64_t>({5}, {9, 46, 41, 2, 7}));
+}
+
+TEST_P(GroupByAggregatorTest,
+       Merge_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
+  Intrinsic intrinsic{
+      "fedsql_group_by",
+      {CreateTensorSpec("key1", DT_STRING),
+       CreateTensorSpec("key2", DT_STRING)},
+      {CreateTensorSpec("", DT_STRING), CreateTensorSpec("animals", DT_STRING)},
+      {},
+      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor sizeKeys1({"large", "large", "small", "large"});
+  Tensor animalKeys1({"cat", "cat", "cat", "dog"});
+  Tensor t1({1, 3, 15, 27});
+  EXPECT_THAT(aggregator1->Accumulate({&sizeKeys1, &animalKeys1, &t1}), IsOk());
+  // aggregator1 totals: [4, 15, 27]
+  Tensor sizeKeys2({"small", "large", "small", "small"});
+  Tensor animalKeys2({"cat", "cat", "cat", "dog"});
+  Tensor t2({10, 5, 1, 2});
+  EXPECT_THAT(aggregator1->Accumulate({&sizeKeys2, &animalKeys2, &t2}), IsOk());
+  // aggregator1 totals: [9, 26, 27, 2]
+
+  // Create a second GroupByAggregator.
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+  Tensor sizeKeys3({"large", "large", "small", "small"});
+  Tensor animalKeys3({"dog", "dog", "rabbit", "cat"});
+  Tensor t3({3, 11, 7, 20});
+  EXPECT_THAT(aggregator2->Accumulate({&sizeKeys3, &animalKeys3, &t3}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge the two aggregators together.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  // Merged totals: [9, 46, 41, 2, 7]
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  // Verify the resulting tensors.
+  // Only the second key tensor should be included in the output.
+  EXPECT_THAT(result.value().size(), Eq(2));
+  EXPECT_THAT(
+      result.value()[0],
+      IsTensor<string_view>({5}, {"cat", "cat", "dog", "dog", "rabbit"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({5}, {9, 46, 41, 2, 7}));
+}
+
+TEST_P(GroupByAggregatorTest, Merge_NoKeyTensors) {
+  Intrinsic intrinsic{"fedsql_group_by", {}, {}, {}, {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor t1({1, 3, 15, 27});
+  EXPECT_THAT(aggregator1->Accumulate({&t1}), IsOk());
+  Tensor t2({10, 5, 1});
+  EXPECT_THAT(aggregator1->Accumulate({&t2}), IsOk());
+
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+  Tensor t3({3, 11, 7, 20, 5});
+  EXPECT_THAT(aggregator2->Accumulate({&t3}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge the two aggregators together.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value().size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor<int64_t>({1}, {108}));
+}
+
+TEST_P(GroupByAggregatorTest, MergeThisOutputReceivedNoInputsSucceeds) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1({"zero", "one"});
+  Tensor t1({1, 3});
+  EXPECT_THAT(aggregator2->Accumulate({&keys1, &t1}), IsOk());
+  // aggregator2 totals: [1, 3]
+  Tensor keys2({"two", "one", "zero", "one", "three", "two"});
+  Tensor t2({10, 5, 1, 2, 4, 9});
+  EXPECT_THAT(aggregator2->Accumulate({&keys2, &t2}), IsOk());
+  // aggregator2 totals: [2, 10, 19, 4]
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge aggregator2 into aggregator1 which has not received any inputs.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(2));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({4}, {2, 10, 19, 4}));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+}
+
+TEST_P(GroupByAggregatorTest, MergeThisOutputReceivedOnlyEmptyInputsSucceeds) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1({"zero", "one"});
+  Tensor t1({1, 3});
+  EXPECT_THAT(aggregator2->Accumulate({&keys1, &t1}), IsOk());
+  // aggregator2 totals: [1, 3]
+  Tensor keys2({"two", "one", "zero", "one", "three", "two"});
+  Tensor t2({10, 5, 1, 2, 4, 9});
+  EXPECT_THAT(aggregator2->Accumulate({&keys2, &t2}), IsOk());
+  // aggregator2 totals: [2, 10, 19, 4]
+
+  // aggregator1 receives only an empty input.
+  Tensor empty_keys(std::vector<std::string>{});
+  Tensor empty_tensor(std::vector<int32_t>{});
+  EXPECT_THAT(aggregator1->Accumulate({&empty_keys, &empty_tensor}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge aggregator2 into aggregator1 which has not received any inputs.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({4}, {2, 10, 19, 4}));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+}
+
+TEST_P(GroupByAggregatorTest, MergeOtherAggregatorReceivedNoInputsSucceeds) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1({"zero", "one"});
+  Tensor t1({1, 3});
+  EXPECT_THAT(aggregator1->Accumulate({&keys1, &t1}), IsOk());
+  // aggregator1 totals: [1, 3]
+  Tensor keys2({"two", "one", "zero", "one", "three", "two"});
+  Tensor t2({10, 5, 1, 2, 4, 9});
+  EXPECT_THAT(aggregator1->Accumulate({&keys2, &t2}), IsOk());
+  // aggregator1 totals: [2, 10, 19, 4]
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge with aggregator2 which has not received any inputs.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(2));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({4}, {2, 10, 19, 4}));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+}
+
+TEST_P(GroupByAggregatorTest,
+       MergeOtherAggregatorReceivedOnlyEmptyInputsSucceeds) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1({"zero", "one"});
+  Tensor t1({1, 3});
+  EXPECT_THAT(aggregator1->Accumulate({&keys1, &t1}), IsOk());
+  // aggregator1 totals: [1, 3]
+  Tensor keys2({"two", "one", "zero", "one", "three", "two"});
+  Tensor t2({10, 5, 1, 2, 4, 9});
+  EXPECT_THAT(aggregator1->Accumulate({&keys2, &t2}), IsOk());
+  // aggregator1 totals: [2, 10, 19, 4]
+
+  // aggregator2 receives only an empty input.
+  Tensor empty_keys(std::vector<std::string>{});
+  Tensor empty_tensor(std::vector<int32_t>{});
+  EXPECT_THAT(aggregator2->Accumulate({&empty_keys, &empty_tensor}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge with aggregator2 which has only received empty inputs.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({4}, {2, 10, 19, 4}));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+}
+
+// TODO: b/277982238 - Expand on the tests below to check that even when
+// Accumulate or MergeWith return absl::StatusCode::kInvalidArgument, the
+// internal state of the GroupByAggregator remains unaffected, exactly the same
+// as if the failed operation had never been called.
+TEST(GroupByAggregatorTest, AccumulateKeyTensorHasIncompatibleDataType) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key(1.2f);
+  Tensor t(0);
+  absl::Status s = group_by_aggregator->Accumulate({&key, &t});
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      s.message(),
+      ::testing::HasSubstr("Tensor at position 0 did not have expected dtype"));
+}
+
+TEST(GroupByAggregatorTest, AccumulateValueTensorHasIncompatibleDataType) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key("key_string");
+  Tensor t(1.2f);
+  absl::Status s = group_by_aggregator->Accumulate({&key, &t});
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      s.message(),
+      ::testing::HasSubstr("Tensor at position 1 did not have expected dtype"));
+}
+
+TEST(GroupByAggregatorTest, Accumulate_FewerTensorsThanExpected) {
+  Intrinsic intrinsic = {"fedsql_group_by",
+                         {CreateTensorSpec("key1", DT_STRING),
+                          CreateTensorSpec("key2", DT_STRING)},
+                         {CreateTensorSpec("key1_out", DT_STRING),
+                          CreateTensorSpec("key2_out", DT_STRING)},
+                         {},
+                         {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key("key_string");
+  Tensor t(1);
+  absl::Status s = group_by_aggregator->Accumulate({&key, &t});
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr("GroupByAggregator::ValidateInputs: "
+                                   "should operate on 3 input tensors"));
+}
+
+TEST(GroupByAggregatorTest, ValidateInputs_MoreTensorsThanExpected) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key1("key_string_1");
+  Tensor key2("key_string_2");
+  Tensor t(1);
+  absl::Status s = group_by_aggregator->ValidateInputs({&key1, &key2, &t});
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr("GroupByAggregator::ValidateInputs: "
+                                   "should operate on 2 input tensors"));
+}
+
+TEST(GroupByAggregatorTest, ValidateInputs_KeyTensorSmallerThanValueTensor) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key("key_string_1");
+  Tensor t({1, 2});
+  absl::Status s = group_by_aggregator->ValidateInputs({&key, &t});
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr("Shape of value tensor at index 1 does not "
+                                   "match the shape of the first tensor."));
+}
+
+TEST(GroupByAggregatorTest, ValidateInputs_KeyTensorLargerThanValueTensor) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key({"key_string_1", "key_string_2", "key_string_3"});
+  Tensor t({1, 2});
+  absl::Status s = group_by_aggregator->ValidateInputs({&key, &t});
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr("Shape of value tensor at index 1 does not "
+                                   "match the shape of the first tensor."));
+}
+
+TEST(GroupByAggregatorTest,
+     ValidateInputs_MultidimensionalTensorsNotSupported) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key = Tensor::Create(DT_STRING, {2, 2},
+                              CreateTestData<string_view>({"a", "b", "c", "d"}))
+                   .value();
+  Tensor t =
+      Tensor::Create(DT_INT32, {2, 2}, CreateTestData({1, 2, 3, 4})).value();
+  absl::Status s = group_by_aggregator->ValidateInputs({&key, &t});
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr(
+                  "Only scalar or one-dimensional tensors are supported."));
+}
+
+TEST(GroupByAggregatorTest, ValidateInputs_WrongKeyType) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key(42);
+  Tensor t(1);
+  absl::Status s = group_by_aggregator->ValidateInputs({&key, &t});
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(), ::testing::HasSubstr("Tensor at position 0 did not"
+                                                " have expected dtype"));
+}
+
+TEST(GroupByAggregatorTest, Merge_IncompatibleKeyType) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Intrinsic intrinsic2 = {"fedsql_group_by",
+                          {CreateTensorSpec("key", DT_FLOAT)},
+                          {CreateTensorSpec("key_out", DT_FLOAT)},
+                          {},
+                          {}};
+  intrinsic2.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator2 = CreateTensorAggregator(intrinsic2).value();
+  absl::Status s = aggregator1->MergeWith(std::move(*aggregator2));
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr("Expected other GroupByAggregator to have "
+                                   "the same key input and output specs"));
+}
+
+TEST(GroupByAggregatorTest, Merge_IncompatibleOutputKeySpec) {
+  Intrinsic intrinsic = {"fedsql_group_by",
+                         {CreateTensorSpec("key1", DT_STRING),
+                          CreateTensorSpec("key2", DT_STRING)},
+                         {CreateTensorSpec("", DT_STRING),
+                          CreateTensorSpec("key2_out", DT_STRING)},
+                         {},
+                         {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  // Key1 is included in the output of aggregator2 but not included in the
+  // output of aggregator1.
+  Intrinsic intrinsic2 = {"fedsql_group_by",
+                          {CreateTensorSpec("key1", DT_STRING),
+                           CreateTensorSpec("key2", DT_STRING)},
+                          {CreateTensorSpec("key1_out", DT_STRING),
+                           CreateTensorSpec("key2_out", DT_STRING)},
+                          {},
+                          {}};
+  intrinsic2.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator2 = CreateTensorAggregator(intrinsic2).value();
+  absl::Status s = aggregator1->MergeWith(std::move(*aggregator2));
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr("Expected other GroupByAggregator to have "
+                                   "the same key input and output specs"));
+}
+
+TEST(GroupByAggregatorTest,
+     Merge_IncompatibleKeyType_InputTensorListTypesMatch) {
+  Intrinsic intrinsic = {
+      "fedsql_group_by",
+      {CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_INT32)},
+      {CreateTensorSpec("key1_out", DT_STRING),
+       CreateTensorSpec("key2_out", DT_INT32)},
+      {},
+      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Intrinsic intrinsic2 = {"fedsql_group_by",
+                          {CreateTensorSpec("key1", DT_STRING)},
+                          {CreateTensorSpec("key1_out", DT_STRING)},
+                          {},
+                          {}};
+  intrinsic2.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  intrinsic2.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator2 = CreateTensorAggregator(intrinsic2).value();
+  absl::Status s = aggregator1->MergeWith(std::move(*aggregator2));
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr("Expected other GroupByAggregator to have "
+                                   "the same key input and output specs"));
+}
+
+TEST(GroupByAggregatorTest, Merge_IncompatibleValueType) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Intrinsic intrinsic2 = {"fedsql_group_by",
+                          {CreateTensorSpec("key", DT_STRING)},
+                          {CreateTensorSpec("key_out", DT_STRING)},
+                          {},
+                          {}};
+  intrinsic2.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_FLOAT, DT_DOUBLE));
+  auto aggregator2 = CreateTensorAggregator(intrinsic2).value();
+  absl::Status s = aggregator1->MergeWith(std::move(*aggregator2));
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(), ::testing::HasSubstr(
+                               "Expected other GroupByAggregator to "
+                               "use inner intrinsics with the same inputs"));
+}
+
+TEST(GroupByAggregatorTest, Merge_DifferentNumKeys) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Intrinsic intrinsic2 = {
+      "fedsql_group_by",
+      {CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_INT32)},
+      {CreateTensorSpec("key2", DT_STRING),
+       CreateTensorSpec("key2_out", DT_INT32)},
+      {},
+      {}};
+  intrinsic2.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator2 = CreateTensorAggregator(intrinsic2).value();
+  absl::Status s = aggregator1->MergeWith(std::move(*aggregator2));
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr("Expected other GroupByAggregator to have "
+                                   "the same key input and output specs"));
+}
+
+TEST(GroupByAggregatorTest, Merge_NonzeroVsZeroNumKeys) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Intrinsic intrinsic2 = {"fedsql_group_by", {}, {}, {}, {}};
+  intrinsic2.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator2 = CreateTensorAggregator(intrinsic2).value();
+  absl::Status s = aggregator1->MergeWith(std::move(*aggregator2));
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr("Expected other GroupByAggregator to have "
+                                   "the same key input and output specs"));
+}
+
+TEST(GroupByAggregatorTest, Merge_DifferentNumValues) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Intrinsic intrinsic2 = {"fedsql_group_by",
+                          {CreateTensorSpec("key", DT_STRING)},
+                          {CreateTensorSpec("key_out", DT_STRING)},
+                          {},
+                          {}};
+  intrinsic2.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  intrinsic2.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator2 = CreateTensorAggregator(intrinsic2).value();
+  absl::Status s = aggregator1->MergeWith(std::move(*aggregator2));
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              ::testing::HasSubstr("Expected other GroupByAggregator to "
+                                   "use the same number of inner intrinsics"));
+}
+
+TEST(GroupByAggregatorTest, Merge_DifferentTensorAggregatorImpl) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  SumAggregator<int32_t> sum_aggregator(DT_INT32, TensorShape{});
+  absl::Status s = aggregator1->MergeWith(std::move(sum_aggregator));
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      s.message(),
+      ::testing::HasSubstr("Can only merge with another GroupByAggregator"));
+}
+
+TEST(GroupByAggregatorTest, Merge_DifferentMinContributors) {
+  Intrinsic intrinsic1 = CreateIntrinsicWithMinContributors(5);
+  auto aggregator1 = CreateTensorAggregator(intrinsic1).value();
+
+  // The second aggregator has a larger min_contributors_to_group, this is
+  // the more dangerous case from a privacy perspective.
+  Intrinsic intrinsic2 = CreateIntrinsicWithMinContributors(10);
+  auto aggregator2 = CreateTensorAggregator(intrinsic2).value();
+  absl::Status s = aggregator1->MergeWith(std::move(*aggregator2));
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument,
+                          HasSubstr("Expected other GroupByAggregator to have "
+                                    "the same min_contributors_to_group")));
+}
+
+TEST(GroupByAggregatorTest, Merge_MixedMinContributors) {
+  Intrinsic intrinsic1 = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic1).value();
+
+  Intrinsic intrinsic2 = CreateIntrinsicWithMinContributors(10);
+  auto aggregator2 = CreateTensorAggregator(intrinsic2).value();
+  absl::Status s = aggregator1->MergeWith(std::move(*aggregator2));
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument,
+                          HasSubstr("Expected other GroupByAggregator to have "
+                                    "the same min_contributors_to_group")));
+}
+
+TEST(GroupByAggregatorTest, FailsAfterBeingConsumed) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor key("foo");
+  Tensor t(1);
+
+  EXPECT_THAT(aggregator1->Accumulate({&key, &t}), IsOk());
+  EXPECT_THAT(std::move(*aggregator1).Report(), IsOk());
+
+  // Now the aggregator instance has been consumed and should fail any
+  // further operations.
+  EXPECT_THAT(aggregator1->CanReport(), IsFalse());  // NOLINT
+  EXPECT_THAT(std::move(*aggregator1).Report(),
+              StatusIs(absl::StatusCode::kFailedPrecondition));  // NOLINT
+  EXPECT_THAT(aggregator1->Accumulate({&key, &t}),               // NOLINT
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)),
+              // NOLINT
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+
+  // Passing this aggregator as an argument to another MergeWith must fail
+  // too.
+  auto aggregator3 = CreateTensorAggregator(intrinsic).value();
+  EXPECT_THAT(aggregator3->MergeWith(std::move(*aggregator1)),  // NOLINT
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(GroupByAggregatorTest, FailsAfterBeingConsumed_WhenNoKeys) {
+  Intrinsic intrinsic{"fedsql_group_by", {}, {}, {}, {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor t(1);
+  EXPECT_THAT(aggregator1->Accumulate({&t}), IsOk());
+  EXPECT_THAT(std::move(*aggregator1).Report(), IsOk());
+
+  // Now the aggregator instance has been consumed and should fail any
+  // further operations.
+  EXPECT_THAT(aggregator1->CanReport(), IsFalse());  // NOLINT
+  EXPECT_THAT(std::move(*aggregator1).Report(),
+              StatusIs(absl::StatusCode::kFailedPrecondition));  // NOLINT
+  EXPECT_THAT(aggregator1->Accumulate({&t}),                     // NOLINT
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)),
+              // NOLINT
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+
+  // Passing this aggregator as an argument to another MergeWith must fail
+  // too.
+  auto aggregator3 = CreateTensorAggregator(intrinsic).value();
+  EXPECT_THAT(aggregator3->MergeWith(std::move(*aggregator1)),  // NOLINT
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST_P(GroupByAggregatorTest, AddOneContributor_Success) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(10);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  Tensor ordinals(std::vector<int64_t>{2, 0, 3});
+
+  EXPECT_THAT(peer.AddOneContributor(std::move(ordinals)), IsOk());
+
+  if (GetParam()) {
+    EXPECT_THAT(peer.SerializeAndDeserialize(intrinsic), IsOk());
+  }
+
+  EXPECT_THAT(peer.GetContributors(),
+              ::testing::ContainerEq(std::vector<int>{1, 0, 1, 1}));
+}
+
+TEST_P(GroupByAggregatorTest, AddOneContributor_StopsAtMaxValue) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(2);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  Tensor ordinals_1(std::vector<int64_t>{0, 1});
+  Tensor ordinals_2(std::vector<int64_t>{0});
+
+  EXPECT_THAT(peer.AddOneContributor(std::move(ordinals_1)), IsOk());
+
+  if (GetParam()) {
+    EXPECT_THAT(peer.SerializeAndDeserialize(intrinsic), IsOk());
+  }
+
+  EXPECT_THAT(peer.AddOneContributor(std::move(ordinals_2)), IsOk());
+  EXPECT_THAT(peer.GetContributors(),
+              ::testing::ContainerEq(std::vector<int>{2, 1}));
+
+  // Add one more contributor; the count for group 0 should not increase.
+  Tensor ordinals_3(std::vector<int64_t>{0});
+  EXPECT_THAT(peer.AddOneContributor(std::move(ordinals_3)), IsOk());
+
+  // The count for group 0 should not increase further.
+  EXPECT_THAT(peer.GetContributors(),
+              ::testing::ContainerEq(std::vector<int>{2, 1}));
+}
+
+TEST_P(GroupByAggregatorTest, AddOneContributor_HandlesEmptyTensor) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(5);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  Tensor empty_ordinals(std::vector<int64_t>{});
+  EXPECT_THAT(peer.AddOneContributor(std::move(empty_ordinals)), IsOk());
+
+  if (GetParam()) {
+    EXPECT_THAT(peer.SerializeAndDeserialize(intrinsic), IsOk());
+  }
+
+  EXPECT_TRUE(peer.GetContributors().empty());
+}
+
+TEST_P(GroupByAggregatorTest, AddOneContributor_HandlesNegativeOrdinals) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(5);
+  FCP_ASSERT_OK_AND_ASSIGN(auto aggregator, CreateTensorAggregator(intrinsic));
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  Tensor negative_ordinals(std::vector<int64_t>{-1, -2});
+  EXPECT_THAT(peer.AddOneContributor(std::move(negative_ordinals)), IsOk());
+
+  if (GetParam()) {
+    EXPECT_THAT(peer.SerializeAndDeserialize(intrinsic), IsOk());
+  }
+
+  EXPECT_TRUE(peer.GetContributors().empty());
+}
+
+TEST(GroupByAggregatorTest, AddOneContributor_FailsWithInvalidDtype) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(5);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  Tensor ordinals({0, 1});
+
+  EXPECT_THAT(peer.AddOneContributor(std::move(ordinals)),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Expected int64 ordinals")));
+}
+
+TEST(GroupByAggregatorTest, AddOneContributor_FailsWhenMaxContributorsNotSet) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  Tensor ordinals(std::vector<int64_t>{0, 1, 2});
+
+  EXPECT_THAT(
+      peer.AddOneContributor(std::move(ordinals)),
+      StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          HasSubstr(
+              "Expected max contributors to group to be set but it is not")));
+}
+
+TEST_P(GroupByAggregatorTest, AddMultipleContributors_Success) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(10);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  Tensor ordinals(std::vector<int64_t>{0, 2});
+  std::vector<int> num_contributors = std::vector<int>{2, 5};
+
+  EXPECT_THAT(
+      peer.AddMultipleContributors(std::move(ordinals), num_contributors),
+      IsOk());
+
+  if (GetParam()) {
+    EXPECT_THAT(peer.SerializeAndDeserialize(intrinsic), IsOk());
+  }
+
+  EXPECT_THAT(peer.GetContributors(),
+              ::testing::ContainerEq(std::vector<int>{2, 0, 5}));
+}
+
+TEST_P(GroupByAggregatorTest,
+       AddMultipleContributors_SuccessWithMultipleCalls) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(20);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  // First, add 3 contributors to group 0 and 5 contributors to group 2.
+  Tensor ordinals1(std::vector<int64_t>{0, 2});
+  std::vector<int> num_contributors1 = {3, 5};
+  EXPECT_THAT(
+      peer.AddMultipleContributors(std::move(ordinals1), num_contributors1),
+      IsOk());
+
+  // Verify the intermediate state.
+  EXPECT_THAT(peer.GetContributors(),
+              ::testing::ContainerEq(std::vector<int>{3, 0, 5}));
+
+  if (GetParam()) {
+    EXPECT_THAT(peer.SerializeAndDeserialize(intrinsic), IsOk());
+  }
+
+  // Second, add 2 contributors to group 0, 4 to group 1, and 1 to group 2.
+  Tensor ordinals2(std::vector<int64_t>{0, 1, 2});
+  std::vector<int> num_contributors2 = {2, 4, 1};
+  EXPECT_THAT(
+      peer.AddMultipleContributors(std::move(ordinals2), num_contributors2),
+      IsOk());
+
+  // Verify the final accumulated state.
+  // Group 0 should have 3 + 2 = 5 contributors.
+  // Group 1 should have 0 + 4 = 4 contributors.
+  // Group 2 should have 5 + 1 = 6 contributors.
+  EXPECT_THAT(peer.GetContributors(),
+              ::testing::ContainerEq(std::vector<int>{5, 4, 6}));
+}
+
+TEST_P(GroupByAggregatorTest, AddMultipleContributors_ClampsToMaxContributors) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(5);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  // First, add 3 contributors to group 0.
+  Tensor ordinals1(std::vector<int64_t>{0});
+  std::vector<int> num_contributors1 = {3};
+  EXPECT_THAT(
+      peer.AddMultipleContributors(std::move(ordinals1), num_contributors1),
+      IsOk());
+
+  if (GetParam()) {
+    EXPECT_THAT(peer.SerializeAndDeserialize(intrinsic), IsOk());
+  }
+
+  // Second, add 4 contributors to each of group 0 and 1.
+  Tensor ordinals2(std::vector<int64_t>{0, 1});
+  std::vector<int> num_contributors2 = {4, 4};
+  EXPECT_THAT(
+      peer.AddMultipleContributors(std::move(ordinals2), num_contributors2),
+      IsOk());
+
+  // Verify that the number of contributors for group 0 is clamped to 5 and
+  // the number of contributors for group 1 is set correctly.
+  EXPECT_THAT(peer.GetContributors(),
+              ::testing::ContainerEq(std::vector<int>{5, 4}));
+}
+
+TEST(GroupByAggregatorTest,
+     AddMultipleContributors_FailsWhenMaxContributorsNotSet) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  Tensor ordinals(std::vector<int64_t>{0});
+  std::vector<int> num_contributors = {1};
+
+  EXPECT_THAT(
+      peer.AddMultipleContributors(std::move(ordinals), num_contributors),
+      StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          HasSubstr(
+              "Expected max contributors to group to be set but it is not")));
+}
+
+TEST(GroupByAggregatorTest, AddMultipleContributors_FailsOnSizeMismatch) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(10);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  // Ordinals tensor has 2 elements, but num_contributors vector has 3.
+  Tensor ordinals(std::vector<int64_t>{0, 1});
+  std::vector<int> num_contributors = {1, 1, 1};
+
+  EXPECT_THAT(
+      peer.AddMultipleContributors(std::move(ordinals), num_contributors),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("same number of ordinals and contributor counts")));
+}
+
+TEST(GroupByAggregatorTest, AddMultipleContributors_HandlesEmptyInputs) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(5);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  Tensor empty_ordinals(std::vector<int64_t>{});
+  std::vector<int> empty_num_contributors = {};
+
+  EXPECT_THAT(peer.AddMultipleContributors(std::move(empty_ordinals),
+                                           empty_num_contributors),
+              IsOk());
+  EXPECT_TRUE(peer.GetContributors().empty());
+}
+
+TEST_P(GroupByAggregatorTest, AddMultipleContributors_HandlesNegativeOrdinals) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(5);
+  FCP_ASSERT_OK_AND_ASSIGN(auto aggregator, CreateTensorAggregator(intrinsic));
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  Tensor negative_ordinals(std::vector<int64_t>{-1, -2});
+  std::vector<int> num_contributors = {3, 5};
+
+  EXPECT_THAT(peer.AddMultipleContributors(std::move(negative_ordinals),
+                                           num_contributors),
+              IsOk());
+
+  if (GetParam()) {
+    EXPECT_THAT(peer.SerializeAndDeserialize(intrinsic), IsOk());
+  }
+
+  EXPECT_TRUE(peer.GetContributors().empty());
+}
+
+TEST(GroupByAggregatorTest,
+     AccumulateDoesNotUpdateContributorsWithoutMinContributors) {
+  // Create an intrinsic for a sum aggregator without the
+  // min_contributors_to_group parameter.
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+
+  Tensor key({"foo"});
+  Tensor value({1});
+
+  EXPECT_THAT(aggregator->Accumulate({&key, &value}), IsOk());
+
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  // AddOneContributor should not be called if min_contributors_to_group_ is
+  // not set, thus contributors should remain empty.
+  EXPECT_THAT(peer.GetContributors(), ::testing::IsEmpty());
+}
+
+TEST(GroupByAggregatorTest, AccumulateUpdatesContributorsWithMinContributors) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(2);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+
+  Tensor key({"foo"});
+  Tensor value({1});
+  EXPECT_THAT(aggregator->Accumulate({&key, &value}), IsOk());
+
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  // The call should succeed because max_contributors_to_group is derived
+  // from min_contributors_to_group, which allows the call to
+  // AddOneContributor to succeed.
+  EXPECT_THAT(peer.GetContributors(),
+              ::testing::ContainerEq(std::vector<int>{1}));
+}
+
+TEST(GroupByAggregatorTest, AccumulateDoesNotUpdateContributorsWithEmptyInput) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(10);
+  auto aggregator = CreateTensorAggregator(intrinsic).value();
+
+  // Use empty input tensors.
+  Tensor key(std::vector<std::string>{});
+  Tensor value(std::vector<int32_t>{});
+
+  EXPECT_THAT(aggregator->Accumulate({&key, &value}), IsOk());
+
+  GroupByAggregatorPeer peer(std::move(aggregator));
+
+  // AddOneContributor was given no inputs os the contributors should still
+  // be empty.
+  EXPECT_THAT(peer.GetContributors(), ::testing::IsEmpty());
+}
+
+TEST_P(GroupByAggregatorTest, MergeWithMinContributors_Succeeds) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(5);
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor key("foo");
+  Tensor t1(1);
+  Tensor t2(2);
+  Tensor t3(3);
+  ASSERT_THAT(aggregator1->Accumulate({&key, &t1}), IsOk());
+  ASSERT_THAT(aggregator2->Accumulate({&key, &t2}), IsOk());
+  ASSERT_THAT(aggregator2->Accumulate({&key, &t3}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  ASSERT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+
+  GroupByAggregatorPeer peer(std::move(aggregator1));
+  EXPECT_THAT(peer.GetContributors(), ContainerEq(std::vector<int>{3}));
+}
+
+TEST_P(GroupByAggregatorTest, MergeWithClampsContributorsAtMax) {
+  // Set a max of 5 contributors, note that the max tracked is the same as
+  // minimum for publishing in the basic case.
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(5);
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  // Give group "foo" 3 contributors.
+  for (int i = 0; i < 3; ++i) {
+    Tensor key1("foo");
+    Tensor value1(1);
+    ASSERT_THAT(aggregator1->Accumulate({&key1, &value1}), IsOk());
+  }
+
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+  // Give group "foo" 4 contributors.
+  for (int i = 0; i < 4; ++i) {
+    Tensor key2("foo");
+    Tensor value2(1);
+    ASSERT_THAT(aggregator2->Accumulate({&key2, &value2}), IsOk());
+  }
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge aggregator2 into aggregator1. The total for "foo" is 3 + 4 = 7.
+  ASSERT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+
+  GroupByAggregatorPeer peer(std::move(aggregator1));
+  // The number of contributors for "foo" should be clamped at the max of 5.
+  EXPECT_THAT(peer.GetContributors(),
+              ::testing::ContainerEq(std::vector<int>{5}));
+}
+
+TEST_P(GroupByAggregatorTest, MergeHandlesDifferentGroupOrder) {
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(10);
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  // Accumulate into aggregator1: "foo" once, then "bar" twice.
+  Tensor key_foo_1("foo");
+  Tensor value_foo_1(1);
+  ASSERT_THAT(aggregator1->Accumulate({&key_foo_1, &value_foo_1}), IsOk());
+  for (int i = 0; i < 2; ++i) {
+    Tensor key("bar");
+    Tensor value(1);
+    ASSERT_THAT(aggregator1->Accumulate({&key, &value}), IsOk());
+  }
+
+  // Accumulate into aggregator2 in reverse order: "bar" three times, then
+  // "foo" five times.
+  for (int i = 0; i < 3; ++i) {
+    Tensor key("bar");
+    Tensor value(1);
+    ASSERT_THAT(aggregator2->Accumulate({&key, &value}), IsOk());
+  }
+  for (int i = 0; i < 5; ++i) {
+    Tensor key("foo");
+    Tensor value(1);
+    ASSERT_THAT(aggregator2->Accumulate({&key, &value}), IsOk());
+  }
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge aggregator2 into aggregator1.
+  // Expected final counts: foo = 1 + 5 = 6, bar = 2 + 3 = 5.
+  ASSERT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+
+  GroupByAggregatorPeer peer(std::move(aggregator1));
+
+  // One of the groups should have 6 contributors and the other should
+  // have 5.
+  EXPECT_THAT(peer.GetContributors(), UnorderedElementsAre(6, 5));
+}
+
+TEST_P(GroupByAggregatorTest, MergeWithClampsMultipleGroupsIndependently) {
+  // Set a max of 5 contributors.
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(5);
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  // Accumulate into aggregator1: "foo" 3 times, "bar" 1 time.
+  for (int i = 0; i < 3; ++i) {
+    Tensor key("foo");
+    Tensor value(1);
+    ASSERT_THAT(aggregator1->Accumulate({&key, &value}), IsOk());
+  }
+  Tensor key_bar_1("bar");
+  Tensor value_bar_1(1);
+  ASSERT_THAT(aggregator1->Accumulate({&key_bar_1, &value_bar_1}), IsOk());
+
+  // Accumulate into aggregator2: "bar" 2 times, "foo" 4 times.
+  for (int i = 0; i < 2; ++i) {
+    Tensor key("bar");
+    Tensor value(1);
+    ASSERT_THAT(aggregator2->Accumulate({&key, &value}), IsOk());
+  }
+  for (int i = 0; i < 4; ++i) {
+    Tensor key("foo");
+    Tensor value(1);
+    ASSERT_THAT(aggregator2->Accumulate({&key, &value}), IsOk());
+  }
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge aggregator2 into aggregator1.
+  // Expected final counts before clamping: foo = 3 + 4 = 7, bar = 1 + 2
+  // = 3.
+  ASSERT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+
+  GroupByAggregatorPeer peer(std::move(aggregator1));
+
+  // The contributor count for "foo" should be clamped at 5.
+  // The contributor count for "bar" should be 3.
+  EXPECT_THAT(peer.GetContributors(), UnorderedElementsAre(5, 3));
+}
+
+TEST(GroupByFactoryTest, WrongUri) {
+  Intrinsic intrinsic{"wrong_uri",
+                      {CreateTensorSpec("key", DT_STRING)},
+                      {CreateTensorSpec("key_out", DT_STRING)},
+                      {},
+                      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  absl::Status s =
+      (*GetAggregatorFactory("fedsql_group_by"))->Create(intrinsic).status();
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(), HasSubstr("Expected intrinsic URI fedsql_group_by"));
+}
+
+TEST(GroupByFactoryTest, NoInputTensors) {
+  Intrinsic intrinsic{"fedsql_group_by", {}, {}, {}, {}};
+  absl::Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              HasSubstr("Must operate on a nonzero number of input tensors."));
+}
+
+TEST(GroupByFactoryTest, InputAndOutputKeySizeMismatch) {
+  Intrinsic intrinsic{
+      "fedsql_group_by",
+      {CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_FLOAT)},
+      {CreateTensorSpec("animals", DT_STRING)},
+      {},
+      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  absl::Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              HasSubstr("Exactly the same number of input args and "
+                        "output tensors are expected"));
+}
+
+TEST(GroupByFactoryTest, InputAndOutputDtypeMismatch) {
+  Intrinsic intrinsic{
+      "fedsql_group_by",
+      {CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_FLOAT)},
+      {CreateTensorSpec("", DT_STRING), CreateTensorSpec("animals", DT_STRING)},
+      {},
+      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+
+  absl::Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              HasSubstr("Input and output tensors have mismatched specs"));
+}
+
+TEST(GroupByFactoryTest, InputAndOutputShapeInvalid) {
+  Intrinsic intrinsic{"fedsql_group_by",
+                      {TensorSpec("key", DT_STRING, {8})},
+                      {TensorSpec("key", DT_STRING, {8})},
+                      {},
+                      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+
+  absl::Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              HasSubstr("All input and output tensors must have one "
+                        "dimension of unknown size."));
+}
+
+TEST(GroupByFactoryTest, SubIntrinsicNotGroupingAggregator) {
+  Intrinsic intrinsic{"fedsql_group_by",
+                      {CreateTensorSpec("key", DT_STRING)},
+                      {CreateTensorSpec("key_out", DT_STRING)},
+                      {},
+                      {}};
+  intrinsic.nested_intrinsics.push_back(
+      Intrinsic{"federated_sum",
+                {CreateTensorSpec("value", DT_INT32)},
+                {CreateTensorSpec("value", DT_INT64)},
+                {},
+                {}});
+
+  absl::Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(),
+              HasSubstr("Nested intrinsic URIs must start with 'GoogleSQL:'"));
+}
+
+TEST(GroupByFactoryDeathTest, MinContributorsToGroupTensorNotScalar) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  intrinsic.parameters.push_back(
+      Tensor({0, 0, 0}, "min_contributors_to_group"));
+  EXPECT_DEATH(CreateTensorAggregator(intrinsic).IgnoreError(),
+               "used on scalar tensors");
+}
+
+TEST(GroupByFactoryTest, TooManyParameters) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  intrinsic.parameters.push_back(Tensor(5, "min_contributors_to_group"));
+  intrinsic.parameters.push_back(Tensor(5, "min_contributors_to_group"));
+  EXPECT_THAT(CreateTensorAggregator(intrinsic).status(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("At most one input parameter expected")));
+}
+
+TEST(GroupByFactoryTest, MinContributorsToGroupNegative) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  intrinsic.parameters.push_back(Tensor(-5, "min_contributors_to_group"));
+  EXPECT_THAT(CreateTensorAggregator(intrinsic).status(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("must be positive")));
+}
+
+TEST(GroupByFactoryTest, MinContributorsToGroupZero) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  intrinsic.parameters.push_back(Tensor(0, "min_contributors_to_group"));
+  EXPECT_THAT(CreateTensorAggregator(intrinsic).status(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("must be positive")));
+}
+
+TEST(GroupByFactoryTest, MinContributorsToGroupSetDoesNotCauseError) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  intrinsic.parameters.push_back(Tensor(5, "min_contributors_to_group"));
+  EXPECT_THAT(CreateTensorAggregator(intrinsic).status(),
+              StatusIs(absl::StatusCode::kOk));
+}
+
+TEST(GroupByFactoryTest, MinContributorsToGroupWrongName) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  intrinsic.parameters.push_back(Tensor(5, "wrong_name"));
+  EXPECT_THAT(CreateTensorAggregator(intrinsic).status(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("The name of the provided parameter does "
+                                 "not match an expected parameter")));
+}
+
+TEST(GroupByFactoryTest, MinContributorsToGroupNoName) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  intrinsic.parameters.push_back(Tensor(5));
+  EXPECT_THAT(CreateTensorAggregator(intrinsic).status(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("The name of the provided parameter does "
+                                 "not match an expected parameter")));
+}
+
+TEST(GroupByAggregatorTest, Deserialize_FailToParseProto) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  std::string invalid_state("invalid_state");
+  absl::Status s =
+      DeserializeTensorAggregator(intrinsic, invalid_state).status();
+  EXPECT_THAT(s, StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(s.message(), HasSubstr("Failed to parse"));
+}
+
+TEST(GroupByAggregatorTest, ShrinkTensorSliceToSurvivors_Success) {
+  Tensor t({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+  TensorSliceData column = TensorSliceData::Create(std::move(t), 40).value();
+  EXPECT_THAT(
+      GroupByAggregatorPeer::ShrinkTensorSliceToSurvivors<int32_t>(column,
+                                                                   {
+                                                                       0,
+                                                                       2,
+                                                                       4,
+                                                                       6,
+                                                                   }),
+      IsOk());
+  auto column_span_status = column.AsSpan<int32_t>();
+  ABSL_ASSERT_OK(column_span_status);
+  EXPECT_THAT(column_span_status.value(),
+              ::testing::UnorderedElementsAre(0, 2, 4, 6));
+}
+
+TEST_P(GroupByAggregatorTest,
+       ShrinkTensorSliceToSurvivors_InvalidSurvivorIndex) {
+  Tensor t({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+  TensorSliceData column = TensorSliceData::Create(std::move(t), 40).value();
+
+  // The tensor has 10 elements. The survivor_indices set
+  // contains an out-of-bounds index (11).
+  absl::flat_hash_set<size_t> survivor_indices = {
+      1,
+      5,
+      11,
+  };
+
+  // The method should return an absl::StatusCode::kInvalidArgument error
+  // because one of the survivor indices is larger than the number of elements
+  // in the tensor.
+  EXPECT_THAT(
+      GroupByAggregatorPeer::ShrinkTensorSliceToSurvivors<int32_t>(
+          column, survivor_indices),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("survivor_indices contained invalid indices.")));
+}
+
+TEST(GroupByAggregatorTest, ConvertHistogramToSliceDataSucceeds) {
+  OutputTensorList histogram;
+  histogram.push_back(Tensor({"a", "b", "c"}));
+  histogram.push_back(Tensor(std::vector<int64_t>{1, 2, 3}));
+
+  auto result = GroupByAggregatorPeer::ConvertHistogramToSliceData(histogram);
+  ASSERT_THAT(result, IsOk());
+
+  const auto& slice_data = result.value();
+  EXPECT_EQ(slice_data.column_data.size(), 2);
+  EXPECT_EQ(slice_data.column_dtypes.size(), 2);
+  EXPECT_EQ(slice_data.column_dtypes[0], DT_STRING);
+  EXPECT_EQ(slice_data.column_dtypes[1], DT_INT64);
+  EXPECT_EQ(slice_data.num_rows, 3);
+}
+
+TEST(GroupByAggregatorTest, ConvertHistogramToSliceData_EmptyHistogram) {
+  OutputTensorList histogram;
+
+  auto result = GroupByAggregatorPeer::ConvertHistogramToSliceData(histogram);
+
+  ASSERT_THAT(result, IsOk());
+  const auto& slice_data = result.value();
+  EXPECT_THAT(slice_data.column_data, IsEmpty());
+  EXPECT_THAT(slice_data.column_dtypes, IsEmpty());
+  EXPECT_EQ(slice_data.num_rows, 0);
+}
+
+TEST(GroupByAggregatorTest,
+     ConvertHistogramToSliceData_InconsistentColumnSizes) {
+  // Create a histogram where the tensors (columns) have different lengths.
+  OutputTensorList histogram;
+  histogram.push_back(Tensor({"a", "b", "c"}));
+  histogram.push_back(
+      // This tensor has a different size from the one above.
+      Tensor(std::vector<int64_t>{1, 2}));
+
+  EXPECT_THAT(GroupByAggregatorPeer::ConvertHistogramToSliceData(histogram),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Expected histogram to be a list of "
+                                 "tensors of the same size")));
+}
+
+TEST(GroupByAggregatorTest, ShrinkHistogramToSurvivorsSucceeds) {
+  OutputTensorList histogram;
+  histogram.push_back(Tensor({"a", "b", "c", "d"}));
+  histogram.push_back(Tensor(std::vector<int64_t>{10, 20, 30, 40}));
+  auto slice_data_result =
+      GroupByAggregatorPeer::ConvertHistogramToSliceData(histogram);
+  ASSERT_THAT(slice_data_result, IsOk());
+
+  absl::flat_hash_set<size_t> survivor_indices = {0, 2};
+
+  auto result = GroupByAggregatorPeer::ShrinkHistogramToSurvivors(
+      std::move(slice_data_result).value(), survivor_indices);
+  ASSERT_THAT(result, IsOk());
+
+  const auto& shrunk_histogram = result.value();
+  ASSERT_EQ(shrunk_histogram.size(), 2);
+  auto status_or_pairs = TensorsToKeyValuePairs<string_view, int64_t>(
+      shrunk_histogram[0], shrunk_histogram[1]);
+  FCP_ASSERT_OK_AND_ASSIGN(auto pairs, status_or_pairs);
+  EXPECT_THAT(
+      pairs, UnorderedElementsAre(KeyValuePair<string_view, int64_t>{"a", 10},
+                                  KeyValuePair<string_view, int64_t>{"c", 30}));
+}
+
+TEST(GroupByAggregatorTest, ShrinkHistogramToSurvivorsNoSurvivors) {
+  OutputTensorList histogram;
+  histogram.push_back(Tensor({"a", "b"}));
+  histogram.push_back(Tensor(std::vector<int64_t>{10, 20}));
+  auto slice_data_result =
+      GroupByAggregatorPeer::ConvertHistogramToSliceData(histogram);
+  ASSERT_THAT(slice_data_result, IsOk());
+
+  absl::flat_hash_set<size_t> survivor_indices = {};
+
+  auto result = GroupByAggregatorPeer::ShrinkHistogramToSurvivors(
+      std::move(slice_data_result).value(), survivor_indices);
+  ASSERT_THAT(result, IsOk());
+
+  const auto& shrunk_histogram = result.value();
+  EXPECT_EQ(shrunk_histogram.size(), 2);
+  EXPECT_THAT(shrunk_histogram[0], IsTensor<string_view>({0}, {}));
+  EXPECT_THAT(shrunk_histogram[1], IsTensor<int64_t>({0}, {}));
+}
+
+TEST(GroupByAggregatorTest, ShrinkHistogramToSurvivorsAllSurvivors) {
+  OutputTensorList histogram;
+  histogram.push_back(Tensor({"a", "b"}));
+  histogram.push_back(Tensor(std::vector<int64_t>{10, 20}));
+  auto slice_data_result =
+      GroupByAggregatorPeer::ConvertHistogramToSliceData(histogram);
+  ASSERT_THAT(slice_data_result, IsOk());
+
+  absl::flat_hash_set<size_t> survivor_indices = {0, 1};
+
+  auto result = GroupByAggregatorPeer::ShrinkHistogramToSurvivors(
+      std::move(slice_data_result).value(), survivor_indices);
+  ASSERT_THAT(result, IsOk());
+
+  const auto& shrunk_histogram = result.value();
+  ASSERT_EQ(shrunk_histogram.size(), 2);
+  auto status_or_pairs = TensorsToKeyValuePairs<string_view, int64_t>(
+      shrunk_histogram[0], shrunk_histogram[1]);
+  FCP_ASSERT_OK_AND_ASSIGN(auto pairs, status_or_pairs);
+  EXPECT_THAT(
+      pairs, UnorderedElementsAre(KeyValuePair<string_view, int64_t>{"a", 10},
+                                  KeyValuePair<string_view, int64_t>{"b", 20}));
+}
+
+TEST_P(GroupByAggregatorTest, ReportWithMinContributors) {
+  // Configure the aggregator to require at least 3 contributors per group.
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(3);
+  FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<TensorAggregator> aggregator,
+                           CreateTensorAggregator(intrinsic));
+
+  // Create key tensors once to avoid redundancy.
+  Tensor key_a("a");
+  Tensor key_b("b");
+  Tensor key_c("c");
+  Tensor key_d("d");
+
+  // Accumulate data for group "a" (3 contributors) -> should survive.
+  Tensor val_a1(10);
+  ABSL_ASSERT_OK(aggregator->Accumulate({&key_a, &val_a1}));
+  Tensor val_a2(1);
+  ABSL_ASSERT_OK(aggregator->Accumulate({&key_a, &val_a2}));
+  Tensor val_a3(5);
+  ABSL_ASSERT_OK(aggregator->Accumulate({&key_a, &val_a3}));
+
+  // Accumulate data for group "b" (2 contributors) -> should be dropped.
+  Tensor val_b1(20);
+  ABSL_ASSERT_OK(aggregator->Accumulate({&key_b, &val_b1}));
+  Tensor val_b2(2);
+  ABSL_ASSERT_OK(aggregator->Accumulate({&key_b, &val_b2}));
+
+  // Accumulate data for group "c" (4 contributors) -> should survive.
+  Tensor val_c1(30);
+  ABSL_ASSERT_OK(aggregator->Accumulate({&key_c, &val_c1}));
+  Tensor val_c2(3);
+  ABSL_ASSERT_OK(aggregator->Accumulate({&key_c, &val_c2}));
+  Tensor val_c3(3);
+  ABSL_ASSERT_OK(aggregator->Accumulate({&key_c, &val_c3}));
+  Tensor val_c4(3);
+  ABSL_ASSERT_OK(aggregator->Accumulate({&key_c, &val_c4}));
+
+  // Accumulate data for group "d" (1 contributor) -> should be dropped.
+  Tensor val_d1(40);
+  ABSL_ASSERT_OK(aggregator->Accumulate({&key_d, &val_d1}));
+
+  // Check that serializing and deserializing doesn't break anything.
+  if (GetParam()) {
+    auto serialized_state = std::move(*aggregator).Serialize();
+    ASSERT_THAT(serialized_state, IsOk());
+    aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
+  FCP_ASSERT_OK_AND_ASSIGN(const auto& histogram,
+                           std::move(*aggregator).Report());
+  // Expecting survivors "a" (sum 16) and "c" (sum 39), in any order.
+  ASSERT_EQ(histogram.size(), 2);
+  auto status_or_pairs =
+      TensorsToKeyValuePairs<string_view, int64_t>(histogram[0], histogram[1]);
+  FCP_ASSERT_OK_AND_ASSIGN(auto pairs, status_or_pairs);
+  EXPECT_THAT(
+      pairs, UnorderedElementsAre(KeyValuePair<string_view, int64_t>{"a", 16},
+                                  KeyValuePair<string_view, int64_t>{"c", 39}));
+}
+
+TEST_P(GroupByAggregatorTest, MergeAndReportWithMinContributors) {
+  // Configure two aggregators to require at least 3 contributors per group.
+  Intrinsic intrinsic = CreateIntrinsicWithMinContributors(3);
+  FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<TensorAggregator> aggregator1,
+                           CreateTensorAggregator(intrinsic));
+  FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<TensorAggregator> aggregator2,
+                           CreateTensorAggregator(intrinsic));
+
+  // Create key tensors once to avoid redundancy.
+  Tensor key_a("a");
+  Tensor key_b("b");
+  Tensor key_c("c");
+
+  // In aggregator1, "a" and "b" have 2 contributors each.
+  Tensor val1_a1(10);
+  ABSL_ASSERT_OK(aggregator1->Accumulate({&key_a, &val1_a1}));
+  Tensor val1_a2(1);
+  ABSL_ASSERT_OK(aggregator1->Accumulate({&key_a, &val1_a2}));
+  Tensor val1_b1(20);
+  ABSL_ASSERT_OK(aggregator1->Accumulate({&key_b, &val1_b1}));
+  Tensor val1_b2(2);
+  ABSL_ASSERT_OK(aggregator1->Accumulate({&key_b, &val1_b2}));
+
+  // In aggregator2, "a" gets 2 more contributors and "c" gets 3.
+  Tensor val2_a1(5);
+  ABSL_ASSERT_OK(aggregator2->Accumulate({&key_a, &val2_a1}));
+  Tensor val2_a2(4);
+  ABSL_ASSERT_OK(aggregator2->Accumulate({&key_a, &val2_a2}));
+  Tensor val2_c1(30);
+  ABSL_ASSERT_OK(aggregator2->Accumulate({&key_c, &val2_c1}));
+  Tensor val2_c2(3);
+  ABSL_ASSERT_OK(aggregator2->Accumulate({&key_c, &val2_c2}));
+  Tensor val2_c3(3);
+  ABSL_ASSERT_OK(aggregator2->Accumulate({&key_c, &val2_c3}));
+
+  // Check that serializing and deserializing doesn't break anything.
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
+  // Merge aggregator2 into aggregator1.
+  ABSL_ASSERT_OK(aggregator1->MergeWith(std::move(*aggregator2)));
+
+  // After merging:
+  // "a" has 4 contributors (sum 20) -> survives.
+  // "b" has 2 contributors (sum 22) -> is dropped.
+  // "c" has 3 contributors (sum 36) -> survives.
+  FCP_ASSERT_OK_AND_ASSIGN(const auto& histogram,
+                           std::move(*aggregator1).Report());
+  ASSERT_EQ(histogram.size(), 2);
+  auto status_or_pairs =
+      TensorsToKeyValuePairs<string_view, int64_t>(histogram[0], histogram[1]);
+  FCP_ASSERT_OK_AND_ASSIGN(auto pairs, status_or_pairs);
+  EXPECT_THAT(
+      pairs, UnorderedElementsAre(KeyValuePair<string_view, int64_t>{"a", 20},
+                                  KeyValuePair<string_view, int64_t>{"c", 36}));
+}
+
+TEST(GroupByAggregatorTest, Partition_MultipleKeyTensors_Succeeds) {
+  Intrinsic intrinsic{"fedsql_group_by",
+                      {CreateTensorSpec("key1", DT_STRING),
+                       CreateTensorSpec("key2", DT_STRING)},
+                      {CreateTensorSpec("key1_out", DT_STRING),
+                       CreateTensorSpec("key2_out", DT_STRING)},
+                      {},
+                      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
+  FCP_ASSERT_OK_AND_ASSIGN(auto group_by_aggregator,
+                           CreateTensorAggregator(intrinsic));
+  Tensor size_k1({"large", "large", "small", "large"});
+  Tensor animal_k1({"cat", "cat", "cat", "dog"});
+  Tensor t1({1, 3, 15, 27});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&size_k1, &animal_k1, &t1}),
+              IsOk());
+  // Totals:
+  // large, cat: 1+3=4
+  // small, cat: 15
+  // large, dog: 27
+
+  Tensor size_k2({"small", "large", "small", "small"});
+  Tensor animal_k2({"cat", "cat", "cat", "dog"});
+  Tensor t2({10, 5, 1, 2});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&size_k2, &animal_k2, &t2}),
+              IsOk());
+  // Totals:
+  // large, cat: 4+5=9
+  // small, cat: 15+10+1=26
+  // large, dog: 27
+  // small, dog: 2
+
+  Tensor size_k3({"large", "large", "small", "small"});
+  Tensor animal_k3({"dog", "dog", "rabbit", "cat"});
+  Tensor t3({3, 11, 7, 20});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&size_k3, &animal_k3, &t3}),
+              IsOk());
+  // Totals:
+  // large, cat: 9
+  // small, cat: 26+20=46
+  // large, dog: 27+3+11=41
+  // small, dog: 2
+  // small, rabbit: 7
+
+  FCP_ASSERT_OK_AND_ASSIGN(
+      auto serialized_states,
+      std::move(*group_by_aggregator).Partition(/*num_partitions=*/2));
+  ASSERT_EQ(serialized_states.size(), 2);
+  FCP_ASSERT_OK_AND_ASSIGN(
+      auto group_by_aggregator_0,
+      DeserializeTensorAggregator(intrinsic, serialized_states[0]));
+  FCP_ASSERT_OK_AND_ASSIGN(
+      auto group_by_aggregator_1,
+      DeserializeTensorAggregator(intrinsic, serialized_states[1]));
+
+  EXPECT_THAT(std::move(*group_by_aggregator_0).Report(),
+              IsOkAndHolds(ElementsAre(
+                  IsTensor<string_view>({"small"}),
+                  IsTensor<string_view>({"rabbit"}),
+                  IsTensor<int64_t>({7}))));
+  EXPECT_THAT(
+      std::move(*group_by_aggregator_1).Report(),
+      IsOkAndHolds(ElementsAre(
+          IsTensor<string_view>({"large", "small", "large", "small"}),
+          IsTensor<string_view>({"cat", "cat", "dog", "dog"}),
+          IsTensor<int64_t>({9, 46, 41, 2}))));
+}
+
+TEST(GroupByAggregatorTest, Partition_InvalidNumPartitions_Fails) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  EXPECT_THAT(std::move(*group_by_aggregator).Partition(/*num_partitions=*/0),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("num_partitions must be at least 1.")));
+}
+
+TEST(GroupByAggregatorTest, Partition_WithMinContributor_Success) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  intrinsic.parameters.push_back(Tensor(10, "min_contributors_to_group"));
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor keys1({"zero", "zero", "one", "four"});
+  Tensor t1({1, 3, 15, 27});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys1, &t1}), IsOk());
+  // Totals: [4, 15, 27]
+  Tensor keys2({"one", "zero", "one", "five"});
+  Tensor t2({10, 5, 1, 2});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys2, &t2}), IsOk());
+  // Totals: [9, 26, 27, 2]
+
+  FCP_ASSERT_OK_AND_ASSIGN(std::vector<std::string> partitioned_states,
+                           std::move(*group_by_aggregator).Partition(2));
+  EXPECT_EQ(partitioned_states.size(), 2);
+
+  // Check partition 0.
+  FCP_ASSERT_OK_AND_ASSIGN(auto factory, GetAggregatorFactory(intrinsic.uri));
+  std::unique_ptr<TensorAggregator> deserialized_aggregator;
+  FCP_ASSERT_OK_AND_ASSIGN(
+      deserialized_aggregator,
+      factory->Deserialize(intrinsic, std::move(partitioned_states[0])));
+  GroupByAggregator* aggregator_raw_ptr =
+      dynamic_cast<GroupByAggregator*>(deserialized_aggregator.get());
+  auto contributors = aggregator_raw_ptr->GetContributors();
+    EXPECT_THAT(contributors, ElementsAre(3, 1, 1));
+
+  // Check partition 1.
+  FCP_ASSERT_OK_AND_ASSIGN(
+      deserialized_aggregator,
+      factory->Deserialize(intrinsic, std::move(partitioned_states[1])));
+  aggregator_raw_ptr =
+      dynamic_cast<GroupByAggregator*>(deserialized_aggregator.get());
+
+  contributors = aggregator_raw_ptr->GetContributors();
+    EXPECT_THAT(contributors, ElementsAre(3));
+}
+
+TEST(GroupByAggregatorTest,
+     Partition_WithMinContributor_StopsAtMaxContributors) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  intrinsic.parameters.push_back(Tensor(2, "min_contributors_to_group"));
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor keys1({"zero", "zero", "zero", "zero"});
+  Tensor t1({1, 3, 15, 5});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys1, &t1}), IsOk());
+  Tensor keys2({"seven", "seven", "seven", "one"});
+  Tensor t2({10, 27, 1, 2});
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys2, &t2}), IsOk());
+
+  FCP_ASSERT_OK_AND_ASSIGN(std::vector<std::string> partitioned_states,
+                           std::move(*group_by_aggregator).Partition(2));
+  EXPECT_EQ(partitioned_states.size(), 2);
+
+  // Check partition 0.
+  FCP_ASSERT_OK_AND_ASSIGN(auto factory, GetAggregatorFactory(intrinsic.uri));
+  FCP_ASSERT_OK_AND_ASSIGN(
+      auto deserialized_aggregator,
+      factory->Deserialize(intrinsic, std::move(partitioned_states[0])));
+  GroupByAggregator* aggregator_raw_ptr =
+      dynamic_cast<GroupByAggregator*>(deserialized_aggregator.get());
+  auto contributors = aggregator_raw_ptr->GetContributors();
+    EXPECT_THAT(contributors, ElementsAre(2, 2));
+  FCP_ASSERT_OK_AND_ASSIGN(auto result,
+                           std::move(*deserialized_aggregator).Report());
+  EXPECT_THAT(result, ElementsAre(
+      IsTensor<string_view>({"seven", "zero"}),
+      IsTensor<int64_t>({38, 24})));
+
+  // Check partition 1.
+  FCP_ASSERT_OK_AND_ASSIGN(
+      deserialized_aggregator,
+      factory->Deserialize(intrinsic, std::move(partitioned_states[1])));
+  aggregator_raw_ptr =
+      dynamic_cast<GroupByAggregator*>(deserialized_aggregator.get());
+  contributors = aggregator_raw_ptr->GetContributors();
+    EXPECT_THAT(contributors, ElementsAre(1));
+  FCP_ASSERT_OK_AND_ASSIGN(result,
+                           std::move(*deserialized_aggregator).Report());
+    EXPECT_THAT(result, ElementsAre(IsTensor<string_view>({}),
+                                    IsTensor<int64_t>({})));
+}
+
+TEST(GroupByAggregatorTest, Partition_NoKeys_Succeeds) {
+  Intrinsic intrinsic{"fedsql_group_by", {}, {}, {}, {}};
+  Intrinsic inner{"GoogleSQL:sum",
+                  {CreateTensorSpec("val", DT_INT32)},
+                  {CreateTensorSpec("val_out", DT_INT32)},
+                  {},
+                  {}};
+  intrinsic.nested_intrinsics.push_back(std::move(inner));
+
+  FCP_ASSERT_OK_AND_ASSIGN(auto aggregator, CreateTensorAggregator(intrinsic));
+
+  Tensor t({1, 2, 3});
+  EXPECT_THAT(aggregator->Accumulate({&t}), IsOk());
+
+  FCP_ASSERT_OK_AND_ASSIGN(std::vector<std::string> partitioned_states,
+                           std::move(*aggregator).Partition(2));
+  EXPECT_EQ(partitioned_states.size(), 2);
+
+  FCP_ASSERT_OK_AND_ASSIGN(auto factory, GetAggregatorFactory(intrinsic.uri));
+
+  // Partition 0 should contain the accumulated data (sum = 6)
+  FCP_ASSERT_OK_AND_ASSIGN(
+      auto deserialized_aggregator0,
+      factory->Deserialize(intrinsic, std::move(partitioned_states[0])));
+  FCP_ASSERT_OK_AND_ASSIGN(auto result0,
+                           std::move(*deserialized_aggregator0).Report());
+  EXPECT_EQ(result0.size(), 1);
+  EXPECT_THAT(result0[0], IsTensor<int32_t>({1}, {6}));
+
+  // Partition 1 should be empty
+  FCP_ASSERT_OK_AND_ASSIGN(
+      auto deserialized_aggregator1,
+      factory->Deserialize(intrinsic, std::move(partitioned_states[1])));
+  FCP_ASSERT_OK_AND_ASSIGN(auto result1,
+                           std::move(*deserialized_aggregator1).Report());
+  EXPECT_EQ(result1.size(), 1);
+  EXPECT_THAT(result1[0], IsTensor<int32_t>({0}, {}));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    GroupByAggregatorTestInstantiation, GroupByAggregatorTest,
+    ::testing::ValuesIn<bool>({false, true}),
+    [](const ::testing::TestParamInfo<GroupByAggregatorTest::ParamType>& info) {
+      return info.param ? "SerializeDeserialize" : "None";
+    });
+
+}  // namespace
+}  // namespace aggregation
+}  // namespace fcp

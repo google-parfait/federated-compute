@@ -1,0 +1,108 @@
+/*
+ * Copyright 2023 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "fcp/aggregation/group_by/partitioner.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <utility>
+#include <vector>
+
+#include "absl/status/status.h"
+#include "absl/status/status_macros.h"
+#include "absl/status/statusor.h"
+#include "fcp/aggregation/core/agg_vector.h"
+#include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/vector_data.h"
+
+namespace fcp {
+namespace aggregation {
+
+namespace {
+// Combines two hashes together.
+// Similar to boost's hash_combine().
+size_t CombineHashes(size_t a, size_t b) {
+  a ^= b + 0x9e3779b9 + (a << 6) + (a >> 2);
+  return a;
+}
+
+}  // namespace
+
+absl::StatusOr<Partitioner> Partitioner::Create(
+    const std::vector<Tensor>& key_tensors, int num_partitions) {
+  if (key_tensors.empty()) {
+    // If there are no keys, there is exactly one group containing all
+    // accumulated rows. We partition it by routing this single element entirely
+    // to partition 0, leaving other partitions empty. All data vectors are
+    // expected to have size = 1, which will match the size of the hashes
+    // vector.
+    std::vector<size_t> hashes(1, 0);
+    std::vector<int> partition_sizes(num_partitions, 0);
+    partition_sizes[0] = 1;
+    return Partitioner(std::move(hashes), std::move(partition_sizes));
+  }
+  if (key_tensors[0].shape().dim_sizes().size() != 1) {
+    return absl::InvalidArgumentError(
+        "Expected key tensor to be one-dimensional.");
+  }
+  auto key_size = key_tensors[0].shape().dim_sizes()[0];
+  for (const auto& key : key_tensors) {
+    if (key.shape().dim_sizes().size() != 1 ||
+        key.shape().dim_sizes()[0] != key_size) {
+      return absl::InvalidArgumentError(
+          "All key tensors must have the same one-dimensional size.");
+    }
+  }
+  std::vector<size_t> hashes(key_size, 0);
+  for (const auto& key : key_tensors) {
+    DTYPE_CASES(key.dtype(), T, {
+      AggVector<T> data = key.AsAggVector<T>();
+      for (const auto& [index, value] : data) {
+        hashes[index] = CombineHashes(hashes[index], std::hash<T>()(value));
+      }
+    });
+  }
+  std::vector<int> partition_sizes(num_partitions, 0);
+  for (auto& hash : hashes) {
+    hash = hash % num_partitions;
+    partition_sizes[hash]++;
+  }
+  return Partitioner(std::move(hashes), std::move(partition_sizes));
+}
+
+absl::StatusOr<std::vector<Tensor>> Partitioner::PartitionKeys(
+    const Tensor& key_tensor) {
+  std::vector<Tensor> result_tensors;
+  DTYPE_CASES(key_tensor.dtype(), T, {
+    auto slices = PartitionInternal<T>(key_tensor.AsSpan<T>());
+    result_tensors.reserve(slices.size());
+    for (auto& slice : slices) {
+      auto dim_size = static_cast<int64_t>(slice.size());
+      ABSL_ASSIGN_OR_RETURN(
+          Tensor tensor,
+          Tensor::Create(key_tensor.dtype(), {dim_size},
+                         std::make_unique<VectorData<T>>(std::move(slice))));
+      result_tensors.push_back(std::move(tensor));
+    }
+  });
+  return result_tensors;
+}
+
+}  // namespace aggregation
+}  // namespace fcp
