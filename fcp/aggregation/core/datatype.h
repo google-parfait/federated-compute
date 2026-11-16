@@ -56,7 +56,6 @@ struct TypeTraits {
   }
 
 // Mapping of native types to DT_ types.
-// TODO: b/222605809 - Add other types.
 MATCH_TYPE_AND_DTYPE(float, DT_FLOAT, TypeKind::kNumeric);
 MATCH_TYPE_AND_DTYPE(double, DT_DOUBLE, TypeKind::kNumeric);
 MATCH_TYPE_AND_DTYPE(int32_t, DT_INT32, TypeKind::kNumeric);
@@ -112,22 +111,32 @@ MATCH_TYPE_AND_DTYPE(string_view, DT_STRING, TypeKind::kString);
 #define DTYPE_STRING_CASES(TYPE_ARG, STMTS) \
   DTYPE_CASE(string_view, TYPE_ARG, STMTS)
 
-// TODO: b/222605809 - Add other types.
-#define DTYPE_CASES(TYPE_ENUM, TYPE_ARG, STMTS)      \
-  DTYPE_CASES_BEGIN(TYPE_ENUM)                       \
-  DTYPE_NUMERICAL_CASES(TYPE_ARG, SINGLE_ARG(STMTS)) \
-  DTYPE_STRING_CASES(TYPE_ARG, SINGLE_ARG(STMTS))    \
-  DTYPE_CASES_END(TYPE_ENUM)
+// The DTYPE_CASES family of macros expands to a statement wrapped in
+// `do { ... } while (0)` so that it must be followed by a semicolon, like a
+// regular statement, without producing an empty statement. Note that `continue`
+// and `break` inside STMTS apply to the wrapper and the switch respectively,
+// not to an enclosing loop.
+#define DTYPE_CASES(TYPE_ENUM, TYPE_ARG, STMTS)        \
+  do {                                                 \
+    DTYPE_CASES_BEGIN(TYPE_ENUM)                       \
+    DTYPE_NUMERICAL_CASES(TYPE_ARG, SINGLE_ARG(STMTS)) \
+    DTYPE_STRING_CASES(TYPE_ARG, SINGLE_ARG(STMTS))    \
+    DTYPE_CASES_END(TYPE_ENUM)                         \
+  } while (0)
 
 #define NUMERICAL_ONLY_DTYPE_CASES(TYPE_ENUM, TYPE_ARG, STMTS) \
-  DTYPE_CASES_BEGIN(TYPE_ENUM)                                 \
-  DTYPE_NUMERICAL_CASES(TYPE_ARG, SINGLE_ARG(STMTS))           \
-  DTYPE_CASES_END(TYPE_ENUM)
+  do {                                                         \
+    DTYPE_CASES_BEGIN(TYPE_ENUM)                               \
+    DTYPE_NUMERICAL_CASES(TYPE_ARG, SINGLE_ARG(STMTS))         \
+    DTYPE_CASES_END(TYPE_ENUM)                                 \
+  } while (0)
 
 #define FLOATING_ONLY_DTYPE_CASES(TYPE_ENUM, TYPE_ARG, STMTS) \
-  DTYPE_CASES_BEGIN(TYPE_ENUM)                                \
-  DTYPE_FLOATING_CASES(TYPE_ARG, SINGLE_ARG(STMTS))           \
-  DTYPE_CASES_END(TYPE_ENUM)
+  do {                                                        \
+    DTYPE_CASES_BEGIN(TYPE_ENUM)                              \
+    DTYPE_FLOATING_CASES(TYPE_ARG, SINGLE_ARG(STMTS))         \
+    DTYPE_CASES_END(TYPE_ENUM)                                \
+  } while (0)
 
 }  // namespace internal
 

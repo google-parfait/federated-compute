@@ -31,7 +31,6 @@ enum DataType {
   DT_STRING = 7;
   DT_INT64 = 9;
   DT_UINT64 = 23;
-  // TODO: b/222605809 - Add other types
 }
 
 // Tensor shape (e.g. dimensions)
