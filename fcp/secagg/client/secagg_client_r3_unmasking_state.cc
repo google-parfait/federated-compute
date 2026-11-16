@@ -83,7 +83,6 @@ SecAggClientR3UnmaskingState::HandleMessage(
     return AbortAndNotifyServer(async_abort_->Message());
 
   const UnmaskingRequest& request = message.unmasking_request();
-  std::set<uint32_t> dead_at_round_3_client_ids;
 
   // Parse incoming request and mark dead clients as dead.
   for (uint32_t i : request.dead_3_client_ids()) {

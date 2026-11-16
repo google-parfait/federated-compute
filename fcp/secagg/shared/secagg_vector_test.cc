@@ -385,7 +385,7 @@ TEST_P(SecAggVectorTest, VerifyGetAsPackedBytesDiesAfterMoving) {
   SecAggVector vector(raw_vector, 4, GetParam());
   SecAggVector other = std::move(vector);
 
-  ASSERT_DEATH(auto i = vector.GetAsPackedBytes(),  // NOLINT
+  ASSERT_DEATH([[maybe_unused]] auto i = vector.GetAsPackedBytes(),  // NOLINT
                "SecAggVector has no value");
 }
 
@@ -403,8 +403,9 @@ TEST(SecAggVectorTest, VerifyTakePackedBytesDiesAfterMoving) {
   SecAggVector vector(raw_vector, 4);
   SecAggVector other = std::move(vector);
 
-  ASSERT_DEATH(auto i = std::move(vector).TakePackedBytes(),  // NOLINT
-               "SecAggVector has no value");
+  ASSERT_DEATH(
+      [[maybe_unused]] auto i = std::move(vector).TakePackedBytes(),  // NOLINT
+      "SecAggVector has no value");
 }
 
 INSTANTIATE_TEST_SUITE_P(Branchless, SecAggVectorTest, ::testing::Bool(),

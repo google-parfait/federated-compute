@@ -401,7 +401,6 @@ TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalCheckinWithPopulationEligibilitySpecInvalidFormat) {
   // We return a fake response which requires fetching the plan via HTTP,
   // but which has the checkpoint data available inline.
-  std::string expected_plan = kPlan;
   std::string plan_uri = "https://fake.uri/plan";
   Resource plan_resource;
   plan_resource.set_uri(plan_uri);

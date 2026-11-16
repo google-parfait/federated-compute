@@ -453,7 +453,7 @@ absl::Status HttpFederatedProtocolTest::RunSuccessfulEligibilityEvalCheckin(
   if (eligibility_eval_enabled) {
     // We return a fake response which returns the plan/initial checkpoint
     // data inline, to keep things simple.
-    std::string expected_plan = kPlan;
+    [[maybe_unused]] std::string expected_plan = kPlan;
     Resource plan_resource;
     plan_resource.mutable_inline_resource()->set_data(kPlan);
     std::string expected_checkpoint = kInitCheckpoint;
