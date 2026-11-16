@@ -70,6 +70,8 @@ py_test(
         ":dp_mf_aggregator",
         "@federated_language//federated_language",
         "@pypi//absl_py",
+        "@pypi//jax",
+        "@pypi//jax_privacy",
         "@pypi//numpy",
         "@pypi//optax",
         "@pypi//tensorflow",

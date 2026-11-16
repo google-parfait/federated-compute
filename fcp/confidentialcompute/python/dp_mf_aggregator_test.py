@@ -2,6 +2,10 @@ from typing import Any
 
 from absl.testing import absltest
 import federated_language as flang
+import jax
+import jax.numpy as jnp
+from jax_privacy import noise_addition
+from jax_privacy.matrix_factorization import buffered_toeplitz
 import numpy as np
 import optax
 import tensorflow as tf
@@ -16,6 +20,33 @@ _TEST_STRUCT_TYPE = flang.StructWithPythonType(
     container_type=tuple,
 )
 _TEST_VECTOR_TYPE = flang.TensorType(dtype=np.float32, shape=(1,))
+_NUM_ROUNDS = 10
+_MIN_SEP = 1
+_MIN_BUFFERS = 3
+_MAX_BUFFERS = 5
+_STDDEV = 1.0
+_RNG_SEED = 0
+_CLIENTS_PER_ROUND = 2
+_L2_CLIP_NORM = 1.0
+_INVALID_CLIENTS_PER_ROUND = 0
+_INVALID_L2_CLIP_NORM = -1.0
+_ETA_C = 0.2
+_LEGACY_PRNG_KEY_ERROR = 'error'
+
+
+def _create_matrix_factorization_privatizer() -> optax.GradientTransformation:
+  blt = buffered_toeplitz.optimize(
+      n=_NUM_ROUNDS,
+      min_sep=_MIN_SEP,
+      min_buffers=_MIN_BUFFERS,
+      max_buffers=_MAX_BUFFERS,
+  )
+  return noise_addition.matrix_factorization_privatizer(
+      blt.inverse_as_streaming_matrix(),
+      stddev=_STDDEV,
+      rng=_RNG_SEED,
+      dtype=jnp.float32,
+  )
 
 
 def _create_test_grad_privatizer():
@@ -33,6 +64,20 @@ def _create_test_grad_privatizer():
 
 
 class DPMFAggregatorFactoryExecutionTest(tf.test.TestCase):
+
+  def test_invalid_args(self):
+    grad_privatizer = _create_test_grad_privatizer()
+    with self.assertRaises(ValueError):
+      dp_mf_aggregator.DPMFAggregatorFactory(
+          gradient_privatizer=grad_privatizer,
+          clients_per_round=_INVALID_CLIENTS_PER_ROUND,
+      )
+    with self.assertRaises(ValueError):
+      dp_mf_aggregator.DPMFAggregatorFactory(
+          gradient_privatizer=grad_privatizer,
+          clients_per_round=_CLIENTS_PER_ROUND,
+          l2_clip_norm=_INVALID_L2_CLIP_NORM,
+      )
 
   def test_execution(self):
     dp_mf_factory = dp_mf_aggregator.DPMFAggregatorFactory(
@@ -63,6 +108,31 @@ class DPMFAggregatorFactoryExecutionTest(tf.test.TestCase):
     )
 
     self.assertAllClose(output.measurements, {'num_clipped_updates': 1})
+
+  def test_matrix_factorization_privatizer_execution(self):
+    with (
+        jax.enable_x64(),
+        jax.legacy_prng_key(_LEGACY_PRNG_KEY_ERROR),
+    ):
+      dp_mf_factory = dp_mf_aggregator.DPMFAggregatorFactory(
+          gradient_privatizer=_create_matrix_factorization_privatizer(),
+          clients_per_round=_CLIENTS_PER_ROUND,
+          l2_clip_norm=_L2_CLIP_NORM,
+      )
+      process = dp_mf_factory.create(_TEST_STRUCT_TYPE)
+      client_updates = [
+          (np.array([1.0, 1.0, 1.0], np.float32), np.float32(0.0)),
+          (np.array([0.0, 0.0, 0.0], np.float32), np.float32(1.0)),
+      ]
+      state = process.initialize()
+      output1 = process.next(state, client_updates)
+      self.assertEqual(output1.result[0].shape, (3,))
+      self.assertEqual(output1.result[1].shape, ())
+      self.assertAllClose(output1.measurements, {'num_clipped_updates': 1})
+      output2 = process.next(output1.state, client_updates)
+      self.assertEqual(output2.result[0].shape, (3,))
+      self.assertEqual(output2.result[1].shape, ())
+      self.assertAllClose(output2.measurements, {'num_clipped_updates': 1})
 
 
 def _create_test_clipping_privatizer(noise: float = 0.0):
@@ -263,6 +333,34 @@ class DPMFAdaptiveClippingAggregatorFactoryExecutionTest(tf.test.TestCase):
     output2 = process.next(output1.state, zero_updates)
     expected_mean2 = np.float32(0.5 * np.exp(-0.1))
     self.assertAllClose(output2.result, np.array([expected_mean2], np.float32))
+
+  def test_matrix_factorization_privatizer_execution(self):
+    with (
+        jax.enable_x64(),
+        jax.legacy_prng_key(_LEGACY_PRNG_KEY_ERROR),
+    ):
+      factory = dp_mf_aggregator.DPMFAdaptiveClippingAggregatorFactory(
+          gradient_privatizer=_create_matrix_factorization_privatizer(),
+          clipping_privatizer=_create_matrix_factorization_privatizer(),
+          clients_per_round=_CLIENTS_PER_ROUND,
+          initial_l2_clip_norm=_L2_CLIP_NORM,
+          eta_c=_ETA_C,
+      )
+      process = factory.create(_TEST_STRUCT_TYPE)
+      client_updates = [
+          (np.array([1.0, 1.0, 1.0], np.float32), np.float32(0.0)),
+          (np.array([0.0, 0.0, 0.0], np.float32), np.float32(1.0)),
+      ]
+      state = process.initialize()
+      self.assertAllClose(state[2], _L2_CLIP_NORM)
+      output1 = process.next(state, client_updates)
+      self.assertEqual(output1.result[0].shape, (3,))
+      self.assertEqual(output1.result[1].shape, ())
+      self.assertAllClose(output1.measurements, {'num_clipped_updates': 1})
+      output2 = process.next(output1.state, client_updates)
+      self.assertEqual(output2.result[0].shape, (3,))
+      self.assertEqual(output2.result[1].shape, ())
+      self.assertAllClose(output2.measurements, {'num_clipped_updates': 2})
 
 
 if __name__ == '__main__':
