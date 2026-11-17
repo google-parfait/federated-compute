@@ -16,18 +16,31 @@
 
 #include "fcp/secagg/server/secagg_server_protocol_impl.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/status_macros.h"
-#include "absl/time/time.h"
+#include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/secagg/server/tracing_schema.h"
+#include "fcp/secagg/server/experiments_interface.h"
+#include "fcp/secagg/server/secagg_scheduler.h"
+#include "fcp/secagg/server/secagg_server_metrics_listener.h"
+#include "fcp/secagg/server/secret_sharing_graph.h"
+#include "fcp/secagg/server/send_to_clients_interface.h"
+#include "fcp/secagg/shared/aes_key.h"
+#include "fcp/secagg/shared/aes_prng_factory.h"
 #include "fcp/secagg/shared/compute_session_id.h"
+#include "fcp/secagg/shared/ecdh_key_agreement.h"
 #include "fcp/secagg/shared/ecdh_keys.h"
-#include "fcp/tracing/tracing_span.h"
+#include "fcp/secagg/shared/secagg_vector.h"
+#include "fcp/secagg/shared/shamir_secret_sharing.h"
 
 namespace {
 
@@ -259,6 +272,12 @@ absl::Status SecAggServerProtocolImpl::HandleUnmaskingResponse(
   FCP_CHECK(pairwise_shamir_share_table_ != nullptr &&
             self_shamir_share_table_ != nullptr)
       << "Shamir Shares Tables haven't been initialized";
+  if (unmasking_response.noise_or_prf_key_shares_size() !=
+      number_of_neighbors()) {
+    return absl::InvalidArgumentError(
+        "The UnmaskingResponse does not contain the expected number of key "
+        "shares.");
+  }
 
   // Verify the client sent all the right types of shares.
   for (uint32_t i = 0; i < number_of_neighbors(); ++i) {

@@ -59,16 +59,14 @@ cc_library(
         ":secret_sharing_graph",
         ":send_to_clients_interface",
         ":server_cc_proto",
-        ":tracing_schema",
         "//fcp/base",
         "//fcp/secagg/shared",
         "//fcp/secagg/shared:cc_proto",
-        "//fcp/tracing",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:status_macros",
-        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/strings:string_view",
     ],
 )
 
