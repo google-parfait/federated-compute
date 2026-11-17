@@ -1740,8 +1740,7 @@ TEST_P(GroupByAggregatorTest, AddMultipleContributors_ClampsToMaxContributors) {
 
   // Verify that the number of contributors for group 0 is clamped to 5 and
   // the number of contributors for group 1 is set correctly.
-  EXPECT_THAT(peer.GetContributors(),
-              ::testing::ContainerEq(std::vector<int>{5, 4}));
+  EXPECT_THAT(peer.GetContributors(), ElementsAre(5, 4));
 }
 
 TEST(GroupByAggregatorTest,
@@ -2610,9 +2609,11 @@ TEST(GroupByAggregatorTest,
     EXPECT_THAT(contributors, ElementsAre(2, 2));
   FCP_ASSERT_OK_AND_ASSIGN(auto result,
                            std::move(*deserialized_aggregator).Report());
-  EXPECT_THAT(result, ElementsAre(
-      IsTensor<string_view>({"seven", "zero"}),
-      IsTensor<int64_t>({38, 24})));
+  EXPECT_EQ(result.size(), 2);
+  auto result_keys = result[0].AsSpan<string_view>();
+  auto result_values = result[1].AsSpan<int64_t>();
+    EXPECT_THAT(result_keys, UnorderedElementsAre("seven", "zero"));
+    EXPECT_THAT(result_values, UnorderedElementsAre(38, 24));
 
   // Check partition 1.
   FCP_ASSERT_OK_AND_ASSIGN(
