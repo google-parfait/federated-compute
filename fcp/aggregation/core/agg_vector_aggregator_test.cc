@@ -85,12 +85,9 @@ TEST(AggVectorAggregatorTest, ScalarAggregation_Succeeds) {
 TEST(AggVectorAggregatorTest, DenseAggregation_Succeeds) {
   const TensorShape shape = {4};
   SumAggregator<int32_t> aggregator(DT_INT32, shape);
-  Tensor t1 =
-      Tensor::Create(DT_INT32, shape, CreateTestData({1, 3, 15, 27})).value();
-  Tensor t2 =
-      Tensor::Create(DT_INT32, shape, CreateTestData({10, 5, 1, 2})).value();
-  Tensor t3 =
-      Tensor::Create(DT_INT32, shape, CreateTestData({3, 11, 7, 20})).value();
+  Tensor t1({1, 3, 15, 27});
+  Tensor t2({10, 5, 1, 2});
+  Tensor t3({3, 11, 7, 20});
   EXPECT_THAT(aggregator.Accumulate(t1), IsOk());
   EXPECT_THAT(aggregator.Accumulate(t2), IsOk());
   EXPECT_THAT(aggregator.Accumulate(t3), IsOk());
@@ -188,8 +185,8 @@ TEST(AggVectorAggregatorTest, TypeCheckFailure) {
   EXPECT_DEATH(new SumAggregator<float>(DT_INT32, {}), "Incompatible dtype");
 }
 
-// TODO: b/573774542 - Serialization of AggVectorAggregator subclasses is
-// covered by the FederatedSum tests once federated_sum is migrated to FCP.
+// Serialization of AggVectorAggregator subclasses is covered by
+// federated_sum_test.
 
 }  // namespace
 }  // namespace aggregation

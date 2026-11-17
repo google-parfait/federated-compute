@@ -109,6 +109,10 @@ class AggVectorAggregator : public TensorAggregator {
   }
 
  protected:
+  // Provides access to the underlying aggregator data, e.g. for implementing
+  // Serialize() in derived classes.
+  MutableVectorData<T>& vector_data() { return *data_vector_; }
+
   // Implementation of the tensor aggregation.
   absl::Status AggregateTensors(InputTensorList tensors) override {
     // Delegate the actual aggregation to the specific aggregation

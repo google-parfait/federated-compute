@@ -44,3 +44,19 @@ cc_library(
     copts = FCP_COPTS,
     deps = ["//fcp/aggregation/core:tensor"],
 )
+
+cc_library(
+    name = "mocks",
+    testonly = True,
+    hdrs = ["mocks.h"],
+    copts = FCP_COPTS,
+    deps = [
+        "//fcp/aggregation/checkpoint:checkpoint_builder",
+        "//fcp/aggregation/checkpoint:checkpoint_parser",
+        "//fcp/aggregation/core:tensor",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_googletest//:gtest_for_library",
+    ],
+)

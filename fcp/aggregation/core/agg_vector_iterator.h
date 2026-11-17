@@ -19,6 +19,7 @@
 
 #include <cstddef>
 
+#include "absl/log/absl_check.h"
 #include "fcp/aggregation/core/tensor_data.h"
 
 namespace fcp {

@@ -15,6 +15,7 @@
 load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@com_google_protobuf//bazel:java_proto_library.bzl", "java_proto_library")
 load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("@rules_python//python:proto.bzl", "py_proto_library")
@@ -182,5 +183,102 @@ cc_test(
         "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+proto_library(
+    name = "federated_state_proto",
+    srcs = ["federated_state.proto"],
+)
+
+cc_proto_library(
+    name = "federated_state_cc_proto",
+    deps = [":federated_state_proto"],
+)
+
+# Registers the "federated_sum" intrinsic.
+cc_library(
+    name = "federated_sum",
+    srcs = ["federated_sum.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        ":federated_state_cc_proto",
+        ":intrinsic",
+        ":tensor",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
+# Registers the "federated_mean" and "federated_weighted_mean" intrinsics.
+cc_library(
+    name = "federated_mean",
+    srcs = ["federated_mean.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        ":federated_state_cc_proto",
+        ":intrinsic",
+        ":tensor",
+        ":tensor_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "federated_sum_test",
+    srcs = ["federated_sum_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        ":federated_state_cc_proto",
+        ":federated_sum",
+        ":intrinsic",
+        ":tensor",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_matchers",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "federated_mean_test",
+    srcs = ["federated_mean_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        ":federated_mean",
+        ":intrinsic",
+        ":tensor",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_matchers",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "federated_sum_bench",
+    testonly = 1,
+    srcs = ["federated_sum_bench.cc"],
+    copts = FCP_COPTS,
+    linkstatic = 1,
+    deps = [
+        ":aggregator",
+        ":federated_sum",
+        ":intrinsic",
+        ":tensor",
+        "@com_google_benchmark//:benchmark_main",
     ],
 )
