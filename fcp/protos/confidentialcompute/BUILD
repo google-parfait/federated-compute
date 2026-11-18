@@ -228,6 +228,11 @@ cc_proto_library(
     deps = [":fed_sql_container_config_proto"],
 )
 
+py_proto_library(
+    name = "fed_sql_container_config_py_pb2",
+    deps = [":fed_sql_container_config_proto"],
+)
+
 proto_library(
     name = "file_info_proto",
     srcs = ["file_info.proto"],
@@ -639,6 +644,11 @@ proto_library(
 
 cc_proto_library(
     name = "tee_payload_metadata_cc_proto",
+    deps = [":tee_payload_metadata_proto"],
+)
+
+py_proto_library(
+    name = "tee_payload_metadata_py_pb2",
     deps = [":tee_payload_metadata_proto"],
 )
 
