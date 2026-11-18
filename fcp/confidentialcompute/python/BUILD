@@ -32,12 +32,50 @@ py_library(
     tags = ["manual"],
     visibility = ["//visibility:public"],
     deps = [
+        ":prng_keys",
         "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi//jax",
         "@pypi//jax_privacy",
         "@pypi//optax",
         "@pypi//tensorflow",
+    ],
+)
+
+py_library(
+    name = "dp_mf_aggregator_jax",
+    srcs = ["dp_mf_aggregator_jax.py"],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":prng_keys",
+        "@federated_language//federated_language",
+        "@federated_language//federated_language_jax",
+        "@org_tensorflow_federated//tensorflow_federated",
+        "@pypi//jax",
+        "@pypi//optax",
+    ],
+)
+
+py_test(
+    name = "dp_mf_aggregator_jax_test",
+    srcs = ["dp_mf_aggregator_jax_test.py"],
+    tags = [
+        "cpu:4",
+        "manual",
+    ],
+    deps = [
+        ":dp_mf_aggregator_jax",
+        "@federated_language//federated_language",
+        "@federated_language//federated_language_jax",
+        "@org_tensorflow_federated//tensorflow_federated",
+        "@pypi//absl_py",
+        "@pypi//chex",
+        "@pypi//jax",
+        "@pypi//jax_privacy",
+        "@pypi//jaxtyping",
+        "@pypi//numpy",
+        "@pypi//optax",
     ],
 )
 
@@ -75,6 +113,24 @@ py_test(
         "@pypi//numpy",
         "@pypi//optax",
         "@pypi//tensorflow",
+    ],
+)
+
+py_library(
+    name = "prng_keys",
+    srcs = ["prng_keys.py"],
+    visibility = ["//visibility:public"],
+    deps = ["@pypi//jax"],
+)
+
+py_test(
+    name = "prng_keys_test",
+    srcs = ["prng_keys_test.py"],
+    deps = [
+        ":prng_keys",
+        "@pypi//absl_py",
+        "@pypi//jax",
+        "@pypi//numpy",
     ],
 )
 

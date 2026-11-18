@@ -1,7 +1,7 @@
 """An implementation of the DP MF aggregator using the JaxPrivacy library."""
 
 import functools
-from typing import Any, cast
+from typing import cast
 
 import federated_language as flang
 import jax
@@ -12,34 +12,7 @@ import optax
 import tensorflow as tf
 import tensorflow_federated as tff
 
-
-def _is_prng_key(leaf: Any) -> bool:
-  """Returns True if the leaf has a JAX PRNG key dtype."""
-  return hasattr(leaf, 'dtype') and jax.dtypes.issubdtype(
-      leaf.dtype, jax.dtypes.prng_key
-  )
-
-
-def _unwrap_prng_keys(pytree: Any) -> Any:
-  """Unwraps typed JAX PRNG keys in a PyTree into raw uint32 key data."""
-
-  def _unwrap_leaf(leaf: Any) -> Any:
-    if _is_prng_key(leaf):
-      return jax.random.key_data(leaf)
-    return leaf
-
-  return jax.tree.map(_unwrap_leaf, pytree)
-
-
-def _rewrap_prng_keys(pytree: Any, spec_tree: Any) -> Any:
-  """Rewraps raw uint32 key data in a PyTree into typed JAX PRNG keys."""
-
-  def _rewrap_leaf(leaf: Any, spec_leaf: Any) -> Any:
-    if _is_prng_key(spec_leaf):
-      return jax.random.wrap_key_data(leaf, dtype=spec_leaf.dtype)
-    return leaf
-
-  return jax.tree.map(_rewrap_leaf, pytree, spec_tree)
+from fcp.confidentialcompute.python import prng_keys
 
 
 def _shapes_dtypes_from_typespec(typespec: flang.Type):
@@ -157,7 +130,7 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
           noise_state = self._grad_privatizer.init(
               _shapes_dtypes_from_typespec(value_type)
           )
-          return _unwrap_prng_keys(noise_state)
+          return prng_keys.unwrap_prng_keys(noise_state)
 
         return _jax2tf_convert_cpu_native(jax_init_privatizer)()
 
@@ -197,7 +170,7 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
       @tff.tensorflow.computation
       def finalize_noise(noise_state, unnoised_aggregate):
         def jax_finalize_noise(noise_state, unnoised_aggregate):
-          noise_state = _rewrap_prng_keys(noise_state, grad_state_spec)
+          noise_state = prng_keys.rewrap_prng_keys(noise_state, grad_state_spec)
           noised_aggregate, new_noise_state = self._grad_privatizer.update(
               unnoised_aggregate, noise_state
           )
@@ -205,7 +178,7 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
               lambda arr: arr / self._clients_per_round,
               noised_aggregate,
           )
-          return _unwrap_prng_keys(new_noise_state), noised_mean
+          return prng_keys.unwrap_prng_keys(new_noise_state), noised_mean
 
         return _jax2tf_convert_cpu_native(jax_finalize_noise)(
             noise_state, unnoised_aggregate
@@ -315,8 +288,8 @@ class DPMFAdaptiveClippingAggregatorFactory(
           )
           clip_norm = jnp.float32(self._initial_l2_clip_norm)
           return (
-              _unwrap_prng_keys(grad_noise_state),
-              _unwrap_prng_keys(clipping_noise_state),
+              prng_keys.unwrap_prng_keys(grad_noise_state),
+              prng_keys.unwrap_prng_keys(clipping_noise_state),
               clip_norm,
           )
 
@@ -366,10 +339,10 @@ class DPMFAdaptiveClippingAggregatorFactory(
 
         def jax_finalize_noise(state, unnoised_aggregate, metrics):
           grad_noise_state, clipping_noise_state, clip_norm = state
-          grad_noise_state = _rewrap_prng_keys(
+          grad_noise_state = prng_keys.rewrap_prng_keys(
               grad_noise_state, grad_state_spec
           )
-          clipping_noise_state = _rewrap_prng_keys(
+          clipping_noise_state = prng_keys.rewrap_prng_keys(
               clipping_noise_state, clipping_state_spec
           )
           scaled_aggregate = jax.tree.map(
@@ -396,8 +369,8 @@ class DPMFAdaptiveClippingAggregatorFactory(
           )
           new_clip_norm = clip_norm * jnp.exp(-self._eta_c * (noised_b_t - 0.5))
           new_state = (
-              _unwrap_prng_keys(new_grad_noise_state),
-              _unwrap_prng_keys(new_clipping_noise_state),
+              prng_keys.unwrap_prng_keys(new_grad_noise_state),
+              prng_keys.unwrap_prng_keys(new_clipping_noise_state),
               new_clip_norm,
           )
           return new_state, noised_mean
