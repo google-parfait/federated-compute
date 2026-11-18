@@ -67,17 +67,15 @@ class InputTensorList final {
 
   ~InputTensorList();
 
-  inline const_iterator begin() const { return data_ptr_; }
+  const_iterator begin() const { return data_ptr_; }
 
-  inline const_iterator end() const { return data_ptr_ + size_; }
+  const_iterator end() const { return data_ptr_ + size_; }
 
-  inline size_t size() const { return size_; }
+  size_t size() const { return size_; }
 
-  inline const Tensor* const& operator[](size_t i) const {
-    return data_ptr_[i];
-  }
+  const Tensor* const& operator[](size_t i) const { return data_ptr_[i]; }
 
-  inline const Tensor*& operator[](size_t i) { return data_ptr_[i]; }
+  const Tensor*& operator[](size_t i) { return data_ptr_[i]; }
 
  private:
   union DataStorage {

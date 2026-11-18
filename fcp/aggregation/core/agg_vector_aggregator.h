@@ -64,7 +64,7 @@ class AggVectorAggregator : public TensorAggregator {
   }
 
   // Provides mutable access to the aggregator data as a vector<T>
-  inline std::vector<T>& data() { return *data_vector_; }
+  std::vector<T>& data() { return *data_vector_; }
 
   int GetNumInputs() const override { return num_inputs_; }
 
