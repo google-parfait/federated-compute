@@ -311,12 +311,6 @@ class GroupByAggregator : public TensorAggregator {
       const absl::flat_hash_set<size_t>& survivor_indices);
 
  private:
-  // Returns either nullptr or a unique_ptr to a CompositeKeyCombiner, depending
-  // on the input specification. Relies on CreateKeyTypes.
-  static std::unique_ptr<CompositeKeyCombiner> CreateKeyCombiner(
-      const std::vector<TensorSpec>& input_key_specs,
-      const std::vector<TensorSpec>* output_key_specs);
-
   // Checks that the input tensor at the provided index has the expected type
   // and shape.
   absl::Status ValidateIndexedTensor(const Tensor& tensor, size_t input_index,

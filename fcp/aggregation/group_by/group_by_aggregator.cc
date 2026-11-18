@@ -117,21 +117,6 @@ GroupByAggregator::GroupByAggregator(
   }
 }
 
-std::unique_ptr<CompositeKeyCombiner> GroupByAggregator::CreateKeyCombiner(
-    const std::vector<TensorSpec>& input_key_specs,
-    const std::vector<TensorSpec>* output_key_specs) {
-  // If there are no input keys, support a columnar aggregation that aggregates
-  // all the values in each column and produces a single output value per
-  // column. This would be equivalent to having identical key values for all
-  // rows.
-  if (input_key_specs.empty()) {
-    return nullptr;
-  }
-
-  return std::make_unique<CompositeKeyCombiner>(CreateKeyTypes(
-      input_key_specs.size(), input_key_specs, *output_key_specs));
-}
-
 std::vector<DataType> GroupByAggregator::CreateKeyTypes(
     size_t num_keys_per_input, const std::vector<TensorSpec>& input_key_specs,
     const std::vector<TensorSpec>& output_key_specs) {
@@ -889,10 +874,17 @@ GroupByFactory::CreateInternal(
                         CreateAggregators(intrinsic, aggregator_state));
 
   // Create the key combiner, and only populate the key combiner with state if
-  // there are keys. Also populate the contributor counts if there is an
-  // aggregator state and min_contributors_to_group is set.
-  auto key_combiner = GroupByAggregator::CreateKeyCombiner(intrinsic.inputs,
-                                                           &intrinsic.outputs);
+  // there are keys. If there are no input keys, support a columnar aggregation
+  // that aggregates all the values in each column and produces a single output
+  // value per column (equivalent to having identical key values for all rows).
+  // Also populate the contributor counts if there is an aggregator state and
+  // min_contributors_to_group is set.
+  std::unique_ptr<CompositeKeyCombiner> key_combiner;
+  if (!intrinsic.inputs.empty()) {
+    key_combiner = std::make_unique<CompositeKeyCombiner>(
+        GroupByAggregator::CreateKeyTypes(intrinsic.inputs.size(),
+                                          intrinsic.inputs, intrinsic.outputs));
+  }
   std::vector<int> contributors_to_groups;
   if (aggregator_state != nullptr) {
     if (key_combiner != nullptr) {
