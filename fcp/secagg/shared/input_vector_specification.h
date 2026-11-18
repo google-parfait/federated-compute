@@ -21,6 +21,7 @@
 #include <string>
 
 #include "absl/base/attributes.h"
+#include "absl/strings/string_view.h"
 
 namespace fcp {
 namespace secagg {
@@ -34,7 +35,7 @@ namespace secagg {
 //    degree.
 class InputVectorSpecification {
  public:
-  InputVectorSpecification(const std::string& name, int length,
+  InputVectorSpecification(absl::string_view name, int length,
                            uint64_t modulus);
 
   virtual ~InputVectorSpecification() = default;

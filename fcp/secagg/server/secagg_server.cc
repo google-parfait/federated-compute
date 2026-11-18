@@ -29,6 +29,7 @@
 #include "absl/status/status_builder.h"
 #include "absl/status/status_macros.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "fcp/secagg/server/aes/aes_secagg_server_protocol_impl.h"
 #include "fcp/secagg/server/experiments_names.h"
 #include "fcp/secagg/server/graph_parameter_finder.h"
@@ -183,7 +184,7 @@ absl::Status SecAggServer::Abort() {
   return absl::OkStatus();
 }
 
-absl::Status SecAggServer::Abort(const std::string& reason,
+absl::Status SecAggServer::Abort(absl::string_view reason,
                                  SecAggServerOutcome outcome) {
   const std::string formatted_reason =
       absl::StrCat("Abort upon external request for reason <", reason, ">.");

@@ -24,6 +24,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/container/node_hash_set.h"
+#include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/scheduler.h"
 #include "fcp/secagg/server/experiments_interface.h"
@@ -132,7 +133,7 @@ class SecAggServer {
   //
   // The status will be OK unless the protocol was already completed or aborted.
   absl::Status Abort();
-  absl::Status Abort(const std::string& reason, SecAggServerOutcome outcome);
+  absl::Status Abort(absl::string_view reason, SecAggServerOutcome outcome);
 
   // Abort the specified client for the given reason.
   //

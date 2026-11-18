@@ -18,13 +18,14 @@
 
 #include <string>
 
+#include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/shared/secagg_vector.h"
 
 namespace fcp {
 namespace secagg {
 
-InputVectorSpecification::InputVectorSpecification(const std::string& name,
+InputVectorSpecification::InputVectorSpecification(absl::string_view name,
                                                    int length, uint64_t modulus)
     : name_(name), length_(length), modulus_(modulus) {
   FCP_CHECK(length >= 0) << "Length must be >= 0, given value was" << length;
