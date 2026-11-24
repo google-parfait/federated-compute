@@ -39,6 +39,14 @@ namespace fcp::client::diagnostics {
 enum class DiagnosticCode : int {
   // Never logged; the zero value.
   kUnknown = 0,
+
+  // ----- Errors: 3000 and up -----
+
+  // A write to a SQLite store found a transaction already open on its shared
+  // connection, i.e. one the client opened, and was refused
+  // (FAILED_PRECONDITION) instead of joining it. The client must not keep
+  // transactions open on a connection it shares with PrivateLogger.
+  kErrorSqliteTransactionOpen = 3000,
 };
 
 // Receives DiagnosticCodes, e.g. to forward them to the platform's
