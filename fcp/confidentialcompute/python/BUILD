@@ -103,6 +103,7 @@ py_test(
 py_test(
     name = "dp_mf_aggregator_test",
     srcs = ["dp_mf_aggregator_test.py"],
+    shard_count = 2,
     tags = ["manual"],
     deps = [
         ":dp_mf_aggregator",

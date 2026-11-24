@@ -285,11 +285,66 @@ class DPMFAdaptiveClippingAggregatorFactoryExecutionTest(tf.test.TestCase):
     )
     self.assertEqual(factory._initial_l2_clip_norm, 0.1)
     self.assertEqual(factory._eta_c, 0.2)
+    self.assertTrue(factory._rescale_to_unit_norm)
     process = factory.create(_TEST_VECTOR_TYPE)
     state = process.initialize()
     self.assertAllClose(state[2], 0.1)
 
-  def test_gradient_noise_scaled_by_clip_norm(self):
+  def test_aggregates_scaled_to_unit_norm_by_default(self):
+
+    def _grad_privatizer_with_noise(noise_val: float):
+      def init(params):
+        del params
+        return np.int32(0)
+
+      def privatize(grads, state) -> tuple[Any, Any]:
+        noisy_grads = tf.nest.map_structure(lambda g: g + noise_val, grads)
+        return noisy_grads, state + 1
+
+      return optax.GradientTransformation(init, privatize)  # pyrefly: ignore[bad-argument-type]
+
+    # Initial clip norm C_0 is 2.0. Base noise is 0.5 (calibrated for C=1.0).
+    # rescale_to_unit_norm defaults to True.
+    factory = dp_mf_aggregator.DPMFAdaptiveClippingAggregatorFactory(
+        gradient_privatizer=_grad_privatizer_with_noise(0.5),
+        clipping_privatizer=_create_test_clipping_privatizer(),
+        clients_per_round=2,
+        initial_l2_clip_norm=2.0,
+        eta_c=0.2,
+    )
+    process = factory.create(_TEST_VECTOR_TYPE)
+    state = process.initialize()
+
+    # Round 1: Client 1 has [4.0] (clipped to 2.0), Client 2 has [1.0]
+    # (unclipped). Clipped sum = [3.0], scaled by C_0=2.0 -> [1.5].
+    # Noise 0.5 added -> [2.0]. Divided by clients_per_round (2) without
+    # multiplying back by clip_norm -> [1.0].
+    round1_updates = [
+        np.array([4.0], np.float32),
+        np.array([1.0], np.float32),
+    ]
+    output1 = process.next(state, round1_updates)
+    self.assertAllClose(output1.result, np.array([1.0], np.float32))
+    # 1 clipped (-0.5) and 1 unclipped (+0.5) -> quantile grad = 0.0 -> C_1=2.0.
+    self.assertAllClose(output1.state[2], 2.0)
+
+    # Round 2: Zero updates (unnoised sum is 0).
+    # Noise on unit-norm scaled sum is 0.5, divided by clients_per_round (2) is
+    # 0.25 (independent of clip_norm).
+    zero_updates = [
+        np.array([0.0], np.float32),
+        np.array([0.0], np.float32),
+    ]
+    output2 = process.next(output1.state, zero_updates)
+    self.assertAllClose(output2.result, np.array([0.25], np.float32))
+    expected_c2 = np.float32(2.0 * np.exp(-0.1))
+    self.assertAllClose(output2.state[2], expected_c2)
+
+    # Round 3: Zero updates again with updated C_2; noise on mean remains 0.25.
+    output3 = process.next(output2.state, zero_updates)
+    self.assertAllClose(output3.result, np.array([0.25], np.float32))
+
+  def test_rescale_to_unit_norm_false(self):
 
     def _grad_privatizer_with_noise(noise_val: float):
       def init(params):
@@ -309,30 +364,38 @@ class DPMFAdaptiveClippingAggregatorFactoryExecutionTest(tf.test.TestCase):
         clients_per_round=2,
         initial_l2_clip_norm=2.0,
         eta_c=0.2,
+        rescale_to_unit_norm=False,
     )
     process = factory.create(_TEST_VECTOR_TYPE)
     state = process.initialize()
 
-    # Round 1: Zero updates (unnoised sum is 0).
-    # Since C_0 = 2.0, noise added to sum is 2.0 * 0.5 = 1.0.
-    # Divided by clients_per_round (2), noise on mean is 1.0 / 2 = 0.5.
+    # Round 1: Client 1 has [4.0] (clipped to 2.0), Client 2 has [1.0]
+    # (unclipped). Clipped sum = [3.0], scaled by C_0=2.0 -> [1.5].
+    # Noise 0.5 added -> [2.0]. Multiplied by C_0 / clients_per_round
+    # (2.0 / 2 = 1.0) -> [2.0].
+    round1_updates = [
+        np.array([4.0], np.float32),
+        np.array([1.0], np.float32),
+    ]
+    output1 = process.next(state, round1_updates)
+    self.assertAllClose(output1.result, np.array([2.0], np.float32))
+    self.assertAllClose(output1.state[2], 2.0)
+
+    # Round 2: Zero updates. Noise on mean is C_1 * 0.5 / 2 = 0.5.
     zero_updates = [
         np.array([0.0], np.float32),
         np.array([0.0], np.float32),
     ]
-    output1 = process.next(state, zero_updates)
-    self.assertAllClose(output1.result, np.array([0.5], np.float32))
-    # Both updates unclipped -> avg_b_t = 1.0.
-    # C_1 = 2.0 * exp(-0.2 * (1.0 - 0.5)) = 2.0 * exp(-0.1).
-    expected_c1 = np.float32(2.0 * np.exp(-0.1))
-    self.assertAllClose(output1.state[2], expected_c1)
-
-    # Round 2: Zero updates again, using output1.state with updated C_1.
-    # Noise added to sum is C_1 * 0.5 = (2.0 * exp(-0.1)) * 0.5 = exp(-0.1).
-    # Divided by clients_per_round (2), noise on mean is 0.5 * exp(-0.1).
     output2 = process.next(output1.state, zero_updates)
-    expected_mean2 = np.float32(0.5 * np.exp(-0.1))
-    self.assertAllClose(output2.result, np.array([expected_mean2], np.float32))
+    self.assertAllClose(output2.result, np.array([0.5], np.float32))
+    expected_c2 = np.float32(2.0 * np.exp(-0.1))
+    self.assertAllClose(output2.state[2], expected_c2)
+
+    # Round 3: Zero updates with updated C_2; noise on mean is 0.5 * exp(-0.1).
+    output3 = process.next(output2.state, zero_updates)
+    self.assertAllClose(
+        output3.result, np.array([0.5 * np.exp(-0.1)], np.float32)
+    )
 
   def test_matrix_factorization_privatizer_execution(self):
     with (

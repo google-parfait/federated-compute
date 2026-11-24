@@ -205,8 +205,10 @@ class DPMFAdaptiveClippingAggregatorFactory(
   single-client sensitivity of 1.0):
   - `gradient_privatizer` is calibrated assuming a clip norm of 1.0 (sensitivity
     1.0). In each round t, the aggregator normalizes the gradient sum by C_t
-    before privatizing, and scales the noised result by C_t / N to obtain the
-    mean.
+    (scaling client updates to unit norm) before privatizing. By default
+    (`rescale_to_unit_norm=True`), the noised result is divided by N without
+    multiplying back by C_t (so the learning rate controls the scale of
+    updates); if `rescale_to_unit_norm=False`, it is scaled by C_t / N.
   - `clipping_privatizer` is calibrated to privatize the count of unclipped
     clients (sum of indicator bits b_i in {0, 1}, sensitivity 1.0). The
     aggregator passes the unclipped count to the privatizer and divides the
@@ -229,6 +231,7 @@ class DPMFAdaptiveClippingAggregatorFactory(
       clients_per_round: int,
       initial_l2_clip_norm: float = 0.1,
       eta_c: float = 0.2,
+      rescale_to_unit_norm: bool = True,
   ):
     """Initializes `DPMFAdaptiveClippingAggregatorFactory`.
 
@@ -236,8 +239,9 @@ class DPMFAdaptiveClippingAggregatorFactory(
       gradient_privatizer: The gradient privatizer. This should be calibrated to
         privatize the sum of client updates assuming an L2 clip norm of 1.0,
         e.g. for independent noise, the standard deviation just equals the noise
-        multiplier. The aggregator handles scaling by the clip norm and dividing
-        by `clients_per_round`.
+        multiplier. The aggregator normalizes the clipped sum by the clip norm
+        before privatizing, then divides by `clients_per_round` (and multiplies
+        back by the clip norm only when `rescale_to_unit_norm=False`).
       clipping_privatizer: The clipping privatizer. This should be calibrated to
         privatize the sum of unclipped indicator bits, e.g. for independent
         noise, the standard deviation equals the noise multiplier. The
@@ -247,6 +251,9 @@ class DPMFAdaptiveClippingAggregatorFactory(
         https://arxiv.org/pdf/1905.03871.
       eta_c: The adaptive clipping rate learning rate. The default is 0.2, as in
         https://arxiv.org/pdf/1905.03871.
+      rescale_to_unit_norm: If True (default), keep clipped updates scaled to
+        unit norm (1 / clip_norm) rather than multiplying back by `clip_norm`
+        after adding noise, so the learning rate controls the update scale.
     """
     if clients_per_round <= 0.0:
       raise ValueError('clients_per_round must be a positive float.')
@@ -260,11 +267,12 @@ class DPMFAdaptiveClippingAggregatorFactory(
     self._clients_per_round = clients_per_round
     self._initial_l2_clip_norm = initial_l2_clip_norm
     self._eta_c = eta_c
+    self._rescale_to_unit_norm = rescale_to_unit_norm
 
   def create(
       self, value_type: flang.TensorType | flang.StructType
   ) -> tff.templates.AggregationProcess:
-    """Creates a `tff.templates.AggregationProcess` for DP MF adaptive clipping."""
+    """Creates an `AggregationProcess` for DP MF adaptive clipping."""
     grad_state_spec = jax.eval_shape(
         self._grad_privatizer.init,
         _shapes_dtypes_from_typespec(value_type),
@@ -351,8 +359,9 @@ class DPMFAdaptiveClippingAggregatorFactory(
           noised_scaled, new_grad_noise_state = self._grad_privatizer.update(
               scaled_aggregate, grad_noise_state
           )
+          scaling = 1.0 if self._rescale_to_unit_norm else clip_norm
           noised_mean = jax.tree.map(
-              lambda arr: arr * (clip_norm / self._clients_per_round),
+              lambda arr: arr * (scaling / self._clients_per_round),
               noised_scaled,
           )
           num_clipped = metrics['num_clipped_updates']
