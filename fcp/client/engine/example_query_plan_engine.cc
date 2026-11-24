@@ -205,11 +205,9 @@ absl::Status GenerateAggregationTensorsFromExampleQueryResult(
       // Allow output vector specs to be either BYTES or STRING when the values
       // are bytes, as both are represented by string tensors in FCCheckpoints.
       //
-      // This is needed for the private logger compatibility between older and
-      // newer clients, as the ExampleQuerySpec for the private logger SQL
-      // upload task uses STRING for its output vector spec, even though the
-      // values are bytes from newer clients and base64 encoded strings from
-      // older clients.
+      // Accepting STRING maintains compatibility with deployed PrivateLogger
+      // upload task plans whose schemas typed the "entry" column as STRING
+      // before switching to BYTES.
       absl::Status bytes_check =
           CheckOutputVectorDataType(output_vector_spec, DataType::BYTES);
       absl::Status string_check =

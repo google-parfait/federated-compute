@@ -152,9 +152,9 @@ message HistoricalContext {
 }
 
 message PrivateLoggerOptions {
-  // Whether the runtime supports arbitrary bytestrings from PrivateLogger. If
-  // true, the private logger client should send raw bytes in the "entry"
-  // vector. If false, the private logger client should send base64 encoded
-  // bytes in the "entry" vector.
-  bool support_arbitrary_bytestrings = 1;
+  // Deprecated: ignored by current PrivateLogger implementations, which always
+  // emit raw bytes in the "entry" vector. Still populated as true by FCP
+  // runtimes for compatibility with older PrivateLogger client libraries built
+  // before the base64 fallback was removed; do not set to any other value.
+  bool support_arbitrary_bytestrings = 1 [deprecated = true];
 }

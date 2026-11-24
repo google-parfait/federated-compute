@@ -39,7 +39,6 @@
 #include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
-#include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
@@ -48,7 +47,6 @@
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/event_time_range.pb.h"
 #include "fcp/client/example_query_result.pb.h"
-#include "fcp/client/federated_protocol.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/tensorflow/tensorflow_runner.h"
 #include "fcp/client/test_helpers.h"
@@ -95,8 +93,6 @@ using ::testing::AnyNumber;
 using ::testing::Contains;
 using ::testing::IsSupersetOf;
 using ::testing::Key;
-using ::testing::Not;
-using ::testing::Pair;
 using ::testing::SizeIs;
 using ::testing::StrictMock;
 using ::testing::UnorderedElementsAre;
@@ -318,66 +314,6 @@ class ExampleQueryPlanEngineTest : public testing::Test {
 
   int num_examples_ = 0;
   int64_t example_bytes_ = 0;
-
-  void RunPrivateLoggerTest(
-      ExampleQueryResult example_query_result,
-      std::vector<std::pair<std::string, std::string>> expected_tensors,
-      std::vector<std::string> unexpected_tensor_keys) {
-    Initialize();
-    ExampleQuerySpec spec;
-    ExampleQuerySpec::ExampleQuery* example_query = spec.add_example_queries();
-    example_query->mutable_example_selector()->set_collection_uri(
-        kCollectionUri);
-    example_query->set_min_output_row_count(0);
-    (*example_query->mutable_output_vector_specs())["entry"].set_vector_name(
-        "entry");
-    (*example_query->mutable_output_vector_specs())["entry"].set_data_type(
-        DataType::STRING);
-
-    EXPECT_CALL(mock_opstats_logger_, UpdateDatasetStats(_, _, _))
-        .Times(AnyNumber());
-
-    example_query_result.set_result_source(ExampleQueryResult::PRIVATE_LOGGER);
-
-    example_iterator_factory_ =
-        std::make_unique<FunctionalExampleIteratorFactory>(
-            [query_result_str = example_query_result.SerializeAsString()](
-                const google::internal::federated::plan::ExampleSelector&
-                    selector) {
-              return std::make_unique<SimpleExampleIterator>(
-                  std::vector<std::string>{query_result_str});
-            });
-
-    ExampleQueryPlanEngine plan_engine(
-        {example_iterator_factory_.get()}, &mock_opstats_logger_,
-        /*example_iterator_query_recorder=*/nullptr,
-        /*tensorflow_runner_factory=*/nullptr);
-    engine::PlanResult result = plan_engine.RunPlan(
-        spec, output_checkpoint_filename_,
-        /*use_client_report_wire_format=*/true,
-        /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-        /*uses_confidential_agg=*/false,
-        /*enable_private_logger=*/true,
-        /*drop_out_based_data_availability=*/false);
-
-    ASSERT_THAT(result.outcome, PlanOutcome::kSuccess)
-        << result.original_status;
-    ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
-    const FederatedComputeCheckpoint& checkpoint =
-        result.federated_compute_checkpoints[0];
-
-    std::string payload_str(checkpoint.payload);
-    absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
-        ReadFCCheckpointTensors(payload_str);
-    ABSL_ASSERT_OK(tensors);
-
-    for (const auto& [key, expected_value] : expected_tensors) {
-      EXPECT_THAT(*tensors, Contains(Pair(key, expected_value)));
-    }
-    for (const auto& key : unexpected_tensor_keys) {
-      EXPECT_THAT(*tensors, Not(Contains(Key(key))));
-    }
-  }
 };
 
 TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
@@ -605,8 +541,8 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerVectorNamesAreRewritten) {
   example_query_result_.set_result_source(ExampleQueryResult::PRIVATE_LOGGER);
 
   ExampleQueryResult::VectorData::Values entry_values;
-  entry_values.mutable_string_values()->add_value("value1");
-  entry_values.mutable_string_values()->add_value("value2");
+  entry_values.mutable_bytes_values()->add_value("value1");
+  entry_values.mutable_bytes_values()->add_value("value2");
   (*example_query_result_.mutable_vector_data()
         ->mutable_vectors())[kPrivateLoggerEntryKey] = entry_values;
   ExampleQueryResult::VectorData::Values time_values;
@@ -625,7 +561,7 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerVectorNamesAreRewritten) {
       ->clear_example_queries();
   ExampleQuerySpec::OutputVectorSpec entry_vector_spec;
   entry_vector_spec.set_vector_name("my_upload_query_name/entry");
-  entry_vector_spec.set_data_type(DataType::STRING);
+  entry_vector_spec.set_data_type(DataType::BYTES);
   ExampleQuerySpec::OutputVectorSpec time_vector_spec;
   time_vector_spec.set_vector_name(
       absl::StrCat("my_upload_query_name/", kEventTimeColumnName));
@@ -2291,90 +2227,9 @@ TEST_F(PrivacyIdSplittingTest, NonRotatingPrivacyIdWhenNoWindowingSchedule) {
                   /*end_day=*/2, /*end_hours=*/23)));
 }
 
-// Case 1: kPrivateLoggerEntryKey is present and contains base64 encoded
-// strings. Verifies that existing base64 encoded strings are preserved.
-TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerOnlyEntriesPresent) {
-  google::protobuf::Duration duration;
-  duration.set_seconds(42);
-  std::string serialized_proto = duration.SerializeAsString();
-  std::string encoded_proto = absl::Base64Escape(serialized_proto);
-
-  ExampleQueryResult example_query_result;
-  example_query_result.set_result_source(ExampleQueryResult::PRIVATE_LOGGER);
-  auto* vector_data = example_query_result.mutable_vector_data();
-  ExampleQueryResult::VectorData::Values entries_values;
-  entries_values.mutable_string_values()->add_value(encoded_proto);
-  (*vector_data->mutable_vectors())["entry"] = entries_values;
-
-  Initialize();
-  ExampleQuerySpec spec;
-  ExampleQuerySpec::ExampleQuery* example_query = spec.add_example_queries();
-  example_query->mutable_example_selector()->set_collection_uri(kCollectionUri);
-  example_query->set_min_output_row_count(0);
-  (*example_query->mutable_output_vector_specs())["entry"].set_vector_name(
-      "entry");
-  (*example_query->mutable_output_vector_specs())["entry"].set_data_type(
-      DataType::STRING);
-
-  EXPECT_CALL(mock_opstats_logger_, UpdateDatasetStats(_, _, _))
-      .Times(AnyNumber());
-
-  example_iterator_factory_ =
-      std::make_unique<FunctionalExampleIteratorFactory>(
-          [query_result_str = example_query_result.SerializeAsString()](
-              const google::internal::federated::plan::ExampleSelector&
-                  selector) {
-            return std::make_unique<SimpleExampleIterator>(
-                std::vector<std::string>{query_result_str});
-          });
-
-  ExampleQueryPlanEngine plan_engine(
-      {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr,
-      /*tensorflow_runner_factory=*/nullptr);
-  engine::PlanResult result = plan_engine.RunPlan(
-      spec, output_checkpoint_filename_,
-      /*use_client_report_wire_format=*/true,
-      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false,
-      /*enable_private_logger=*/true,
-      /*drop_out_based_data_availability=*/false);
-
-  ASSERT_THAT(result.outcome, PlanOutcome::kSuccess);
-  ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
-
-  std::string payload_str(result.federated_compute_checkpoints[0].payload);
-  absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
-      ReadFCCheckpointTensors(payload_str);
-  ABSL_ASSERT_OK(tensors);
-
-  ASSERT_THAT(*tensors, Contains(Key("entry")));
-  TensorProto tensor_proto;
-  ASSERT_TRUE(tensor_proto.ParseFromString(tensors->at("entry")));
-
-  // Verify using standard protobuf tools.
-  ASSERT_EQ(tensor_proto.dtype(), DT_STRING);
-  // Content format: [Varint64 length] [bytes]
-  const std::string& content = tensor_proto.content();
-  google::protobuf::io::ArrayInputStream input(content.data(),
-                                     static_cast<int>(content.size()));
-  google::protobuf::io::CodedInputStream coded_input(&input);
-  uint64_t size;
-  ASSERT_TRUE(coded_input.ReadVarint64(&size));
-  std::string result_str;
-  result_str.resize(size);
-  ASSERT_TRUE(coded_input.ReadRaw(result_str.data(), static_cast<int>(size)));
-  EXPECT_EQ(result_str, encoded_proto);
-
-  std::string decoded_output;
-  ASSERT_TRUE(absl::Base64Unescape(result_str, &decoded_output));
-  google::protobuf::Duration output_duration;
-  ASSERT_TRUE(output_duration.ParseFromString(decoded_output));
-  EXPECT_EQ(output_duration.seconds(), 42);
-}
-
-// Case 2: kPrivateLoggerEntryKey is present and contains serialized proto bytes
-// that are not base64 encoded. Verifies that bytes are correctly processed.
+// Verifies that raw serialized proto bytes in kPrivateLoggerEntryKey are
+// accepted even when a deployed upload task plan's output vector spec still
+// specifies DataType::STRING.
 TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerEntryAsBytes) {
   google::protobuf::Duration duration;
   duration.set_seconds(43);
@@ -2394,11 +2249,8 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerEntryAsBytes) {
   example_query->set_min_output_row_count(0);
   (*example_query->mutable_output_vector_specs())["entry"].set_vector_name(
       "entry");
-  // To maintain consistency with legacy clients implementation, we still set
-  // the data type to STRING, even though the output values are bytes.
-  // GenerateAggregationTensorsFromPrivateLoggerExampleQueryResult function
-  // should handle the conversion to bytes while ignoring the data type, and
-  // FCCheckpointTensors treat bytes and strings in the same way anyways.
+  // Exercise compatibility with deployed upload task plans built before the
+  // "entry" column switched from STRING to BYTES.
   (*example_query->mutable_output_vector_specs())["entry"].set_data_type(
       DataType::STRING);
 
