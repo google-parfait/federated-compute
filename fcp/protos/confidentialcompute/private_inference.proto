@@ -72,6 +72,10 @@ message RuntimeConfig {
     MODEL_MODE_MODEL_PER_SESSION = 2;
   }
   ModelMode model_mode = 6;
+
+  // Thinking token budget (0 disables thinking, -1 for dynamic; currently
+  // honored only by PAIC). Thinking tokens count toward `max_generated_tokens`.
+  optional int32 thinking_budget = 7;
 }
 
 // Configuration for the proxy on the (Oak) host on which the Oak TEE is
