@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <utility>
 
 #include "absl/status/status.h"
 #include "absl/status/status_macros.h"
@@ -182,6 +183,57 @@ absl::Status BindInt64(sqlite3* db, sqlite3_stmt* stmt, int index,
     return SqliteErrorStatus(db, "Failed to bind int64 parameter");
   }
   return absl::OkStatus();
+}
+
+absl::Status ExecuteSql(sqlite3* db, const char* sql) {
+  char* error_msg = nullptr;
+  if (sqlite3_exec(db, sql, nullptr, nullptr, &error_msg) != SQLITE_OK) {
+    std::string error_str =
+        error_msg != nullptr ? error_msg : sqlite3_errmsg(db);
+    sqlite3_free(error_msg);
+    return absl::InternalError(
+        absl::StrCat("SQLite execution failed: ", error_str));
+  }
+  return absl::OkStatus();
+}
+
+namespace {
+
+void Rollback(sqlite3* db) {
+  // SQLite may already have rolled back after some errors (e.g. SQLITE_FULL).
+  if (sqlite3_get_autocommit(db) == 0) {
+    ExecuteSql(db, "ROLLBACK;").IgnoreError();
+  }
+}
+
+}  // namespace
+
+absl::StatusOr<ScopedSqliteTransaction> ScopedSqliteTransaction::Begin(
+    sqlite3* db) {
+  ABSL_RETURN_IF_ERROR(ExecuteSql(db, "BEGIN IMMEDIATE;"));
+  return ScopedSqliteTransaction(db);
+}
+
+ScopedSqliteTransaction::ScopedSqliteTransaction(
+    ScopedSqliteTransaction&& other) noexcept
+    : db_(std::exchange(other.db_, nullptr)) {}
+
+ScopedSqliteTransaction::~ScopedSqliteTransaction() {
+  if (db_ != nullptr) {
+    Rollback(db_);
+  }
+}
+
+absl::Status ScopedSqliteTransaction::Commit() {
+  if (db_ == nullptr) {
+    return absl::FailedPreconditionError("The transaction is already over");
+  }
+  sqlite3* const db = std::exchange(db_, nullptr);
+  absl::Status status = ExecuteSql(db, "COMMIT;");
+  if (!status.ok()) {
+    Rollback(db);
+  }
+  return status;
 }
 
 }  // namespace fcp::client::privatelogger::internal

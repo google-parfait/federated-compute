@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <thread>  // NOLINT(build/c++11)
+#include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -283,6 +284,95 @@ TEST(SqliteUtilTest, CheckNoTransactionOpenRejectsANullConnection) {
   EXPECT_THAT(CheckNoTransactionOpen(nullptr, logger),
               StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(logger.codes, IsEmpty());
+}
+
+int64_t CountRows(sqlite3* db, absl::string_view table) {
+  absl::StatusOr<ScopedSqliteStmt> stmt =
+      PrepareStatement(db, absl::StrCat("SELECT COUNT(*) FROM ", table, ";"));
+  EXPECT_THAT(stmt, IsOk());
+  if (!stmt.ok() || sqlite3_step(stmt->get()) != SQLITE_ROW) {
+    ADD_FAILURE() << "Counting the rows of " << table << " failed";
+    return -1;
+  }
+  return sqlite3_column_int64(stmt->get(), 0);
+}
+
+bool TransactionOpen(sqlite3* db) { return sqlite3_get_autocommit(db) == 0; }
+
+TEST(ScopedSqliteTransactionTest, CommitKeepsTheChanges) {
+  ScopedSqlite db = Open(":memory:");
+  Exec(db.get(), "CREATE TABLE t (x INTEGER);");
+  {
+    FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteTransaction transaction,
+                             ScopedSqliteTransaction::Begin(db.get()));
+    EXPECT_TRUE(TransactionOpen(db.get()));
+    Exec(db.get(), "INSERT INTO t VALUES (1);");
+    EXPECT_THAT(transaction.Commit(), IsOk());
+    EXPECT_FALSE(TransactionOpen(db.get()));
+    // The transaction is over.
+    EXPECT_THAT(transaction.Commit(),
+                StatusIs(absl::StatusCode::kFailedPrecondition));
+  }
+  EXPECT_EQ(CountRows(db.get(), "t"), 1);
+}
+
+TEST(ScopedSqliteTransactionTest, DestructionWithoutCommitRollsBack) {
+  ScopedSqlite db = Open(":memory:");
+  Exec(db.get(), "CREATE TABLE t (x INTEGER);");
+  {
+    FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteTransaction transaction,
+                             ScopedSqliteTransaction::Begin(db.get()));
+    Exec(db.get(), "INSERT INTO t VALUES (1);");
+    // A moved-from transaction does nothing on destruction.
+    ScopedSqliteTransaction moved = std::move(transaction);
+    EXPECT_TRUE(TransactionOpen(db.get()));
+  }
+  EXPECT_FALSE(TransactionOpen(db.get()));
+  EXPECT_EQ(CountRows(db.get(), "t"), 0);
+}
+
+TEST(ScopedSqliteTransactionTest, FailedCommitRollsBack) {
+  ScopedSqlite db = Open(":memory:");
+  // A deferred foreign key violation makes COMMIT fail, leaving the
+  // transaction open.
+  Exec(db.get(),
+       "PRAGMA foreign_keys = ON;"
+       "CREATE TABLE parent (id INTEGER PRIMARY KEY);"
+       "CREATE TABLE child (parent_id INTEGER REFERENCES parent (id) "
+       "DEFERRABLE INITIALLY DEFERRED);");
+  FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteTransaction transaction,
+                           ScopedSqliteTransaction::Begin(db.get()));
+  Exec(db.get(), "INSERT INTO child VALUES (1);");
+  EXPECT_THAT(transaction.Commit(),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("FOREIGN KEY")));
+  EXPECT_FALSE(TransactionOpen(db.get()));
+  EXPECT_EQ(CountRows(db.get(), "child"), 0);
+}
+
+TEST(ScopedSqliteTransactionTest, BeginFailsInsideATransactionAndKeepsIt) {
+  ScopedSqlite db = Open(":memory:");
+  Exec(db.get(), "CREATE TABLE t (x INTEGER);");
+  Exec(db.get(), "BEGIN; INSERT INTO t VALUES (1);");
+  EXPECT_THAT(ScopedSqliteTransaction::Begin(db.get()),
+              StatusIs(absl::StatusCode::kInternal));
+  // The open transaction is left alone.
+  EXPECT_TRUE(TransactionOpen(db.get()));
+  Exec(db.get(), "COMMIT;");
+  EXPECT_EQ(CountRows(db.get(), "t"), 1);
+}
+
+TEST(SqliteUtilTest, ExecuteSqlRunsAllStatementsAndReportsErrors) {
+  ScopedSqlite db = Open(":memory:");
+  EXPECT_THAT(ExecuteSql(db.get(),
+                         "CREATE TABLE t (x INTEGER);"
+                         "INSERT INTO t VALUES (1);"
+                         "INSERT INTO t VALUES (2);"),
+              IsOk());
+  EXPECT_EQ(CountRows(db.get(), "t"), 2);
+  EXPECT_THAT(ExecuteSql(db.get(), "NOT VALID SQL"),
+              StatusIs(absl::StatusCode::kInternal,
+                       AllOf(HasSubstr("SQLite execution failed"),
+                             HasSubstr("syntax error"))));
 }
 
 }  // namespace

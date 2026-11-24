@@ -100,6 +100,42 @@ absl::Status BindBlob(sqlite3* db, sqlite3_stmt* stmt, int index,
 absl::Status BindInt64(sqlite3* db, sqlite3_stmt* stmt, int index,
                        int64_t value);
 
+// Runs the SQL statements in `sql` (NUL-terminated, since sqlite3_exec() has
+// no length parameter). Returns INTERNAL with SQLite's error message if one
+// fails.
+absl::Status ExecuteSql(sqlite3* db, const char* sql);
+
+// A write transaction on a connection: Begin() starts it (BEGIN IMMEDIATE),
+// Commit() commits it, and destroying it without a successful Commit() rolls it
+// back. Use it while holding the connection's locks, after
+// CheckNoTransactionOpen(), and destroy it before releasing them; statements
+// prepared inside it should be destroyed first (declare them after it).
+class ScopedSqliteTransaction {
+ public:
+  // Returns INTERNAL if BEGIN IMMEDIATE fails, e.g. because a transaction is
+  // already open (which is left as it is) or the database is locked.
+  static absl::StatusOr<ScopedSqliteTransaction> Begin(sqlite3* db);
+
+  ScopedSqliteTransaction(ScopedSqliteTransaction&& other) noexcept;
+  ScopedSqliteTransaction& operator=(ScopedSqliteTransaction&&) = delete;
+  ScopedSqliteTransaction(const ScopedSqliteTransaction&) = delete;
+  ScopedSqliteTransaction& operator=(const ScopedSqliteTransaction&) = delete;
+
+  // Rolls back, ignoring errors, unless committed.
+  ~ScopedSqliteTransaction();
+
+  // Commits. If COMMIT fails, rolls back and returns its error (INTERNAL).
+  // Either way the transaction is over: calling Commit() again returns
+  // FAILED_PRECONDITION.
+  absl::Status Commit();
+
+ private:
+  explicit ScopedSqliteTransaction(sqlite3* db) : db_(db) {}
+
+  // Null once the transaction is over (or moved from).
+  sqlite3* db_;
+};
+
 }  // namespace fcp::client::privatelogger::internal
 
 #endif  // FCP_CLIENT_PRIVATELOGGER_COMMON_SQLITE_UTIL_H_
