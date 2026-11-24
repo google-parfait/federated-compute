@@ -69,10 +69,19 @@ message SentenceTransformersContainerInitializeConfiguration {
 }
 
 message Input {
-  // The index of the input.
+  // Caller-assigned index identifying this input across the dataset, preserved
+  // in the corresponding `Embedding.index` (not the positional index within
+  // `InputBatch.inputs`).
   int32 index = 1;
   // The text to be encoded.
   string text = 2;
+}
+
+// A batch of Input messages grouped together (e.g., by length bucket) for a
+// single SentenceTransformer.encode() call. Each Input retains its original
+// dataset-level `index`.
+message InputBatch {
+  repeated Input inputs = 1;
 }
 
 // The embedding of a sentence.
