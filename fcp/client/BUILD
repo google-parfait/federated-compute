@@ -761,6 +761,14 @@ java_proto_library(
     deps = [":selector_context_proto"],
 )
 
+java_lite_proto_library(
+    name = "selector_context_java_proto_lite",
+    visibility = [
+        "//visibility:public",
+    ],
+    deps = [":selector_context_proto"],
+)
+
 # --------------------------------------------------------------------
 # example_query_result.proto
 
