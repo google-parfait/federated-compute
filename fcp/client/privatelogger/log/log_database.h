@@ -44,7 +44,8 @@ struct SelectedLogEntries {
 };
 
 // Stores log entries and, per workload set, which of them were contributed to
-// it.
+// it. Implementations must be thread-safe: the methods may be called
+// concurrently from several threads.
 //
 // The write methods take the caller's DiagnosticLogger, to which they log the
 // causes they detect themselves (e.g. kErrorSqliteTransactionOpen); the caller

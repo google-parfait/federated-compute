@@ -83,3 +83,63 @@ cc_test(
         "@sqlite3",
     ],
 )
+
+cc_library(
+    name = "log_storage",
+    hdrs = ["log_storage.h"],
+    copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//fcp/client/diagnostics:diagnostic_logger",
+        "//fcp/client/privatelogger/common:log_entry",
+        "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "database_log_storage",
+    srcs = ["database_log_storage.cc"],
+    hdrs = ["database_log_storage.h"],
+    copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        ":log_database",
+        ":log_storage",
+        "//fcp/base",
+        "//fcp/client/diagnostics:diagnostic_logger",
+        "//fcp/client/privatelogger/common:log_entry",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "database_log_storage_test",
+    srcs = ["database_log_storage_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":database_log_storage",
+        ":log_database",
+        ":log_storage",
+        ":sqlite_log_database",
+        "//fcp/client/diagnostics:diagnostic_logger",
+        "//fcp/client/privatelogger/common:log_entry",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_matchers",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+        "@com_google_googletest//:gtest_main",
+        "@sqlite3",
+    ],
+)
