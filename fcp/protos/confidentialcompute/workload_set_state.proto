@@ -1,0 +1,111 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fcp.confidentialcompute;
+
+option java_package = "com.google.fcp.client.confidentialcompute.proto";
+option java_multiple_files = true;
+
+// Serialized form of UploadTokens. Every field here is either a bearer
+// credential or tied to one aggregation session; the tokens are valid only
+// until the server expires the session.
+message UploadTokensProto {
+  // Server-generated aggregation session ID.
+  string aggregation_id = 1;
+
+  // Client participation token returned by
+  // StartConfidentialAggregationDataUpload. Identifies this client's session
+  // in the submit and abort calls.
+  string client_token = 2;
+
+  // Target URI prefix for the Scotty / ByteStream blob upload.
+  string upload_uri = 3;
+
+  // Scotty / ByteStream resource name the encrypted payload is streamed to.
+  string resource_name = 4;
+
+  // Target URI prefix for the submit and abort calls on the aggregation
+  // session.
+  string submit_uri_prefix = 5;
+
+  // Extra HTTP request headers the server requires on the submit and abort
+  // calls.
+  map<string, string> submit_extra_headers = 6;
+
+  // Extra HTTP request headers the server requires on the blob upload.
+  map<string, string> upload_extra_headers = 7;
+}
+
+// Serialized form of WorkloadSetSelectorSpec.
+message WorkloadSetSelectorSpecProto {
+  // Opaque selection criteria configured by the server for this set,
+  // passed to the caller's data provider as-is. Empty if none.
+  bytes raw_criteria = 1;
+}
+
+// Serialized form of LegacyFcpCompat.
+message LegacyFcpCompatProto {
+  // Collection URI from the legacy ExampleSelector (for example "app:/..."),
+  // or empty if not set.
+  string collection_uri = 1;
+
+  // The plan's ExampleQuery.output_vector_specs, as output (tensor) name ->
+  // vector name, for example "upload_query/entry" -> "upload_query/entry".
+  map<string, string> output_vector_names = 2;
+}
+
+// Serialized form of the confidential aggregation encryption material that the
+// encoder verifies before it encrypts.
+message ConfidentialAggregationEncryption {
+  // Serialized SignedEndorsements from the task assignment, or empty if the
+  // server sent none.
+  bytes signed_endorsements = 1;
+
+  // Serialized ConfidentialEncryptionConfig of the upload session.
+  bytes encryption_config = 2;
+}
+
+// Private serialization format of WorkloadSet, produced by
+// WorkloadSet.toByteString() and read back by WorkloadSet.fromByteString().
+//
+// The serialized message contains live bearer credentials (see
+// UploadTokensProto).
+message WorkloadSetStateProto {
+  // Unique identifier of the workload set; the server-side name of the set.
+  string name = 1;
+
+  // Criteria the caller uses to select records from its local store.
+  WorkloadSetSelectorSpecProto selector_spec = 2;
+
+  // Metadata for callers migrating from legacy Federated Compute.
+  LegacyFcpCompatProto legacy_fcp_compat = 3;
+
+  // How uploads for this set are encrypted. Other schemes, such as Willow,
+  // would be added here.
+  oneof encryption {
+    ConfidentialAggregationEncryption confidential_aggregation = 4;
+  }
+
+  // Ephemeral credentials and endpoints for the upload and submit calls.
+  UploadTokensProto upload_tokens = 5;
+
+  // The log source the set was fetched for.
+  string log_source_name = 6;
+
+  // Id of the fetch that returned the set, logged with its diagnostic events.
+  // Every fetch generates a new one.
+  int64 fetch_id = 7;
+}

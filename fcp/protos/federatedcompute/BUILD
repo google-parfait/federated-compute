@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@com_google_protobuf//bazel:java_lite_proto_library.bzl", "java_lite_proto_library")
 load("@com_google_protobuf//bazel:java_proto_library.bzl", "java_proto_library")
 load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
 load("@com_google_protobuf//bazel:py_proto_library.bzl", "py_proto_library")
@@ -38,6 +39,12 @@ proto_library(
 
 cc_proto_library(
     name = "confidential_encryption_config_cc_proto",
+    deps = [":confidential_encryption_config_proto"],
+)
+
+java_lite_proto_library(
+    name = "confidential_encryption_config_java_proto_lite",
+    visibility = ["//fcp:internal"],
     deps = [":confidential_encryption_config_proto"],
 )
 
@@ -71,6 +78,11 @@ proto_library(
         "@com_google_googleapis//google/rpc:status_proto",
         "@com_google_protobuf//:duration_proto",
     ],
+)
+
+java_lite_proto_library(
+    name = "federated_compute_java_proto_lite",
+    deps = [":federated_compute_proto"],
 )
 
 java_proto_library(

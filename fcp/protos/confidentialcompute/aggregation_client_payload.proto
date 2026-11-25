@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+option java_package = "com.google.protos.fcp.confidentialcompute";
 option java_multiple_files = true;
 
 // Describes the type of compression that has been applied to the data before it

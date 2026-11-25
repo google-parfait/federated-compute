@@ -63,6 +63,12 @@ cc_proto_library(
     deps = [":verification_record_proto"],
 )
 
+java_lite_proto_library(
+    name = "verification_record_java_proto_lite",
+    visibility = ["//fcp:internal"],
+    deps = [":verification_record_proto"],
+)
+
 proto_library(
     name = "blob_header_proto",
     srcs = ["blob_header.proto"],
@@ -71,6 +77,12 @@ proto_library(
 
 cc_proto_library(
     name = "blob_header_cc_proto",
+    deps = [":blob_header_proto"],
+)
+
+java_lite_proto_library(
+    name = "blob_header_java_proto_lite",
+    visibility = ["//fcp:internal"],
     deps = [":blob_header_proto"],
 )
 
@@ -91,6 +103,15 @@ java_proto_library(
 
 py_proto_library(
     name = "key_py_pb2",
+    deps = [":key_proto"],
+)
+
+java_lite_proto_library(
+    name = "key_java_proto_lite",
+    visibility = [
+        "//fcp:internal",
+        "//visibility:public",
+    ],
     deps = [":key_proto"],
 )
 
@@ -121,6 +142,12 @@ cc_proto_library(
     deps = [":payload_transparency_proto"],
 )
 
+java_lite_proto_library(
+    name = "payload_transparency_java_proto_lite",
+    visibility = ["//fcp:internal"],
+    deps = [":payload_transparency_proto"],
+)
+
 java_proto_library(
     name = "payload_transparency_java_proto",
     deps = [":payload_transparency_proto"],
@@ -138,6 +165,12 @@ proto_library(
 
 cc_proto_library(
     name = "aggregation_client_payload_cc_proto",
+    deps = [":aggregation_client_payload_proto"],
+)
+
+java_lite_proto_library(
+    name = "aggregation_client_payload_java_proto_lite",
+    visibility = ["//fcp:internal"],
     deps = [":aggregation_client_payload_proto"],
 )
 
@@ -365,6 +398,11 @@ java_proto_library(
     deps = [":signed_endorsements_proto"],
 )
 
+java_lite_proto_library(
+    name = "signed_endorsements_java_proto_lite",
+    deps = [":signed_endorsements_proto"],
+)
+
 py_proto_library(
     name = "signed_endorsements_py_pb2",
     deps = [":signed_endorsements_proto"],
@@ -393,6 +431,11 @@ java_proto_library(
 
 py_proto_library(
     name = "access_policy_endorsement_options_py_pb2",
+    deps = [":access_policy_endorsement_options_proto"],
+)
+
+java_lite_proto_library(
+    name = "access_policy_endorsement_options_java_proto_lite",
     deps = [":access_policy_endorsement_options_proto"],
 )
 
@@ -691,4 +734,17 @@ cc_proto_library(
 py_proto_library(
     name = "program_worker_tee_config_py_pb2",
     deps = [":program_worker_tee_config_proto"],
+)
+
+# Private serialization format of the confidential compute client API's WorkloadSet.
+proto_library(
+    name = "workload_set_state_proto",
+    srcs = ["workload_set_state.proto"],
+    visibility = ["//fcp:internal"],
+)
+
+java_lite_proto_library(
+    name = "workload_set_state_java_proto_lite",
+    visibility = ["//fcp:internal"],
+    deps = [":workload_set_state_proto"],
 )

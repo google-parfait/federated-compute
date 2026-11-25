@@ -92,6 +92,11 @@ py_proto_library(
     deps = [":plan_proto"],
 )
 
+java_lite_proto_library(
+    name = "plan_java_proto_lite",
+    deps = [":plan_proto"],
+)
+
 java_proto_library(
     name = "plan_java_proto",
     deps = [":plan_proto"],
@@ -137,6 +142,11 @@ java_proto_library(
     deps = [":population_eligibility_spec_proto"],
 )
 
+java_lite_proto_library(
+    name = "population_eligibility_spec_java_proto_lite",
+    deps = [":population_eligibility_spec_proto"],
+)
+
 py_proto_library(
     name = "population_eligibility_spec_py_pb2",
     deps = [":population_eligibility_spec_proto"],
@@ -176,4 +186,22 @@ py_proto_library(
 java_lite_proto_library(
     name = "data_type_java_proto_lite",
     deps = [":data_type_proto"],
+)
+
+java_lite_proto_library(
+    name = "code_java_proto_lite",
+    visibility = ["//visibility:public"],
+    deps = ["@com_google_googleapis//google/rpc:code_proto"],
+)
+
+java_lite_proto_library(
+    name = "status_java_proto_lite",
+    visibility = ["//visibility:public"],
+    deps = ["@com_google_googleapis//google/rpc:status_proto"],
+)
+
+java_lite_proto_library(
+    name = "operations_java_proto_lite",
+    visibility = ["//visibility:public"],
+    deps = ["@com_google_googleapis//google/longrunning:operations_proto"],
 )
