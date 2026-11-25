@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_android//rules:rules.bzl", "android_library")
 load("@rules_java//java:defs.bzl", "java_library")
 
 package(
@@ -26,5 +27,12 @@ java_library(
     name = "client",
     srcs = [
         "CallFromNativeWrapper.java",
+    ],
+)
+
+android_library(
+    name = "time_source",
+    srcs = [
+        "TimeSource.java",
     ],
 )

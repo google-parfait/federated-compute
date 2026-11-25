@@ -12,8 +12,11 @@ build --define=absl=1
 build --incompatible_enable_cc_toolchain_resolution
 build --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1 --incompatible_strict_action_env
 
-# Use a hermetic Java toolchain.
-common --java_runtime_version=remotejdk_11
+# Use a hermetic JDK 21 toolchain (required by Android SDK 37 and Robolectric 4.18+).
+build --java_language_version=21
+build --java_runtime_version=remotejdk_21
+build --tool_java_language_version=21
+build --tool_java_runtime_version=remotejdk_21
 
 # This results in -Werror for all FCP code, but nothing we pull in via
 # repository rules (those labels have a @ prefix).

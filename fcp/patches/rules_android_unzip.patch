@@ -1,0 +1,102 @@
+# Why: The FCP RBE build container (gcr.io/fcp-infra/fcp-build) does not
+# install the host `unzip` binary, which causes rules_android's
+# //toolchains/android:gen_unzip wrapper and two bare-`unzip` genrules
+# (aapt2_proto and desugar_jdk_libs_config) to fail during remote execution.
+#
+# What: Adds a Python 3 standard-library `zipfile` fallback to
+# //toolchains/android:gen_unzip when `unzip` is not on PATH, and wires the
+# two bare-`unzip` genrules to `$(location //toolchains/android:unzip)`.
+#
+# Origin: Authored for FCP (not copied from another repository).
+#
+# Removal: Can be removed once the FCP RBE build container installs `unzip` or
+# upstream rules_android removes its host `unzip` dependency in genrules.
+diff --git a/toolchains/android/BUILD b/toolchains/android/BUILD
+--- a/toolchains/android/BUILD
++++ b/toolchains/android/BUILD
+@@ -38,8 +38,47 @@
+ genrule(
+     name = "gen_unzip",
+     outs = ["unzip.sh"],
+-    cmd = """cat > $@ <<EOF
+-unzip \\$$@
++    cmd = """cat > $@ <<'EOF'
++#!/bin/bash
++set -euo pipefail
++if command -v unzip >/dev/null 2>&1; then
++  exec unzip "$$@"
++fi
++exec python3 - "$$@" <<'PY'
++import fnmatch, sys, zipfile
++args = sys.argv[1:]
++list_only = False
++to_stdout = False
++dest = "."
++pos = []
++i = 0
++while i < len(args):
++  a = args[i]
++  if a == "-d":
++    dest = args[i + 1]; i += 2
++  elif a == "-l":
++    list_only = True; i += 1
++  elif a in ("-c", "-p"):
++    to_stdout = True; i += 1
++  elif a.startswith("-"):
++    i += 1
++  else:
++    pos.append(a); i += 1
++archive, members = pos[0], pos[1:]
++with zipfile.ZipFile(archive) as zf:
++  if list_only:
++    for n in zf.namelist():
++      print(n)
++  elif to_stdout:
++    for m in members:
++      sys.stdout.buffer.write(zf.read(m))
++  elif members:
++    for n in zf.namelist():
++      if any(fnmatch.fnmatch(n, m) for m in members):
++        zf.extract(n, dest)
++  else:
++    zf.extractall(dest)
++PY
+ EOF
+ """,
+     executable = True,
+diff --git a/src/tools/java/com/google/devtools/build/android/proto/BUILD b/src/tools/java/com/google/devtools/build/android/proto/BUILD
+--- a/src/tools/java/com/google/devtools/build/android/proto/BUILD
++++ b/src/tools/java/com/google/devtools/build/android/proto/BUILD
+@@ -25,7 +25,8 @@
+         name = proto + "_proto_file",
+         srcs = ["@rules_android_maven//:com_android_tools_build_aapt2_proto"],
+         outs = [proto + ".proto"],
+-        cmd = "unzip -p \"$<\" " + proto + ".proto | " +
++        tools = ["//toolchains/android:unzip"],
++        cmd = "$(location //toolchains/android:unzip) -p \"$<\" " + proto + ".proto | " +
+               "sed 's/import \\\"/import \\\"src\\/tools\\/java\\/com\\/google\\/devtools\\/build\\/android\\/proto\\//' > \"$@\"",
+     )
+     for proto in [
+diff --git a/tools/android/BUILD b/tools/android/BUILD
+--- a/tools/android/BUILD
++++ b/tools/android/BUILD
+@@ -97,7 +97,8 @@
+         "@rules_android_maven//:com_android_tools_desugar_jdk_libs_configuration_nio",
+     ],
+     outs = ["full_desugar_jdk_libs_config.json"],
+-    cmd = "unzip -q -c " +
++    tools = ["//toolchains/android:unzip"],
++    cmd = "$(location //toolchains/android:unzip) -q -c " +
+           "$(location @rules_android_maven//:com_android_tools_desugar_jdk_libs_configuration_nio) " +
+           "META-INF/desugar/d8/desugar.json > $@",
+     visibility = ["//visibility:public"],
+@@ -109,7 +110,8 @@
+         "@rules_android_maven//:com_android_tools_desugar_jdk_libs_configuration_minimal",
+     ],
+     outs = ["minimal_desugar_jdk_libs_config.json"],
+-    cmd = "unzip -q -c " +
++    tools = ["//toolchains/android:unzip"],
++    cmd = "$(location //toolchains/android:unzip) -q -c " +
+           "$(location @rules_android_maven//:com_android_tools_desugar_jdk_libs_configuration_minimal) " +
+           "META-INF/desugar/d8/desugar.json > $@",
+ )

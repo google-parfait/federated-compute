@@ -31,7 +31,6 @@ bazel_dep(name = "protobuf", version = "33.1", repo_name = "com_google_protobuf"
 bazel_dep(name = "re2", version = "2025-11-05", repo_name = "com_googlesource_code_re2")
 bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "rules_java", version = "9.4.2")
-bazel_dep(name = "rules_jvm_external", version = "6.10")
 bazel_dep(name = "rules_license", version = "1.0.0")
 bazel_dep(name = "rules_python", version = "2.0.2")
 bazel_dep(name = "sqlite3", version = "3.54.1")
@@ -50,24 +49,6 @@ use_repo(
     protodatastore_cpp = "protodatastore-cpp",
 )
 
-maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
-maven.install(
-    name = "fcp_maven",
-    artifacts = [
-        "com.google.code.findbugs:jsr305:3.0.2",
-        "com.google.errorprone:error_prone_annotations:2.11.0",
-        "com.google.guava:guava:31.0.1-jre",
-        "com.google.truth:truth:1.1.3",
-        "junit:junit:4.13",
-        "org.mockito:mockito-core:4.3.1",
-    ],
-    repositories = [
-        "https://maven.google.com",
-        "https://repo1.maven.org/maven2",
-    ],
-)
-use_repo(maven, "fcp_maven")
-
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(
     hub_name = "fcp_pypi",
@@ -76,11 +57,90 @@ pip.parse(
 )
 use_repo(pip, pypi = "fcp_pypi")
 
-# Dependencies only needed for tests or building binary targets.
+# Dependencies only needed for tests, building binary targets, or Java/Android targets (not
+# depended on by downstream consumers of FCP as a Bazel module).
 # go/keep-sorted start
 bazel_dep(name = "google_benchmark", version = "1.9.5", dev_dependency = True, repo_name = "com_google_benchmark")
+bazel_dep(name = "rules_android", version = "0.8.1", dev_dependency = True)
+bazel_dep(name = "rules_go", version = "0.59.0", dev_dependency = True)
+bazel_dep(name = "rules_jvm_external", version = "6.10", dev_dependency = True)
+bazel_dep(name = "rules_robolectric", version = "4.18.1", dev_dependency = True, repo_name = "robolectric")
+bazel_dep(name = "rules_shell", version = "0.6.1", dev_dependency = True)
 bazel_dep(name = "toolchains_llvm", version = "1.6.0", dev_dependency = True)
 # go/keep-sorted end
+
+rules_java_toolchains = use_extension(
+    "@rules_java//java:extensions.bzl",
+    "toolchains",
+    dev_dependency = True,
+)
+use_repo(rules_java_toolchains, "remote_java_tools")
+
+maven = use_extension(
+    "@rules_jvm_external//:extensions.bzl",
+    "maven",
+    dev_dependency = True,
+)
+maven.install(
+    name = "fcp_maven",
+    artifacts = [
+        "androidx.room:room-compiler:2.8.4",
+        "com.google.auto.value:auto-value-annotations:1.11.0",
+        "com.google.auto.value:auto-value:1.11.0",
+        "com.google.code.findbugs:jsr305:3.0.2",
+        "com.google.errorprone:error_prone_annotations:2.11.0",
+        "com.google.guava:guava:33.5.0-jre",
+        "com.google.truth:truth:1.4.4",
+        "junit:junit:4.13.2",
+        "org.mockito:mockito-core:5.14.2",
+    ],
+    lock_file = "//fcp:maven_host_install.json",
+    repositories = [
+        "https://dl.google.com/android/maven2",
+        "https://maven-central.storage-download.googleapis.com/maven2",
+        "https://repo1.maven.org/maven2",
+    ],
+)
+maven.install(
+    name = "fcp_android_maven",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    additional_coursier_options = ["--reconciliation=*:*:relaxed"],
+    artifacts = [
+        "androidx.annotation:annotation:1.9.1",
+        "androidx.datastore:datastore-core-android:1.3.0",
+        "androidx.datastore:datastore-guava:1.3.0",
+        "androidx.room:room-runtime-android:2.8.4",
+        "androidx.test.ext:junit:1.2.1",
+        "androidx.test:core:1.6.1",
+        "com.google.auto.value:auto-value-annotations:1.11.0",
+        "com.google.code.findbugs:jsr305:3.0.2",
+        "com.google.crypto.tink:tink-android:1.24.0",
+        "com.google.errorprone:error_prone_annotations:2.11.0",
+        "com.google.flogger:flogger-system-backend:0.8",
+        "com.google.flogger:flogger:0.8",
+        "com.google.flogger:google-extensions:0.8",
+        "com.google.guava:guava:33.5.0-android",
+        "com.google.truth:truth:1.4.4",
+        "junit:junit:4.13.2",
+        "org.jetbrains.kotlin:kotlin-stdlib:2.1.20",
+        "org.mockito:mockito-core:5.14.2",
+        "org.robolectric:annotations:4.18.1",
+        "org.robolectric:robolectric:4.18.1",
+        "org.robolectric:shadows-framework:4.18.1",
+    ],
+    excluded_artifacts = [
+        "com.google.protobuf:protobuf-java",
+        "com.google.protobuf:protobuf-javalite",
+    ],
+    lock_file = "//fcp:maven_install.json",
+    repositories = [
+        "https://dl.google.com/android/maven2",
+        "https://maven-central.storage-download.googleapis.com/maven2",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+use_repo(maven, "fcp_android_maven", "fcp_maven", "unpinned_fcp_android_maven", "unpinned_fcp_maven")
 
 # Module overrides.
 # go/keep-sorted start block=yes newline_separated=yes
@@ -89,6 +149,20 @@ archive_override(
     integrity = "sha256-I7HdbkLQ7fhDRap2RUzVYq3W97QNOpKc5TXo0fl/gcQ=",
     strip_prefix = "oak-f7393a196c9158c28cba2f9b37994a5a349083d9",
     urls = ["https://github.com/project-oak/oak/archive/f7393a196c9158c28cba2f9b37994a5a349083d9.tar.gz"],
+)
+
+single_version_override(
+    module_name = "rules_android",
+    patch_strip = 1,
+    patches = ["//fcp/patches:rules_android_unzip.patch"],
+    version = "0.8.1",
+)
+
+single_version_override(
+    module_name = "rules_robolectric",
+    patch_strip = 1,
+    patches = ["//fcp/patches:rules_robolectric_mirror.patch"],
+    version = "4.18.1",
 )
 # go/keep-sorted end
 
@@ -109,3 +183,33 @@ register_toolchains(
 python = use_extension("@rules_python//python/extensions:python.bzl", "python", dev_dependency = True)
 python.defaults(python_version = "3.13")
 python.toolchain(python_version = "3.13")
+
+# Configure Android tools and hermetic Android SDK for building and testing Android targets.
+# rules_android 0.8.1's go.mod requires Go >= 1.23 while its MODULE.bazel defaults to 1.22.4.
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency = True)
+go_sdk.download(version = "1.24.0")
+
+remote_android_extensions = use_extension(
+    "@rules_android//bzlmod_extensions:android_extensions.bzl",
+    "remote_android_tools_extensions",
+    dev_dependency = True,
+)
+use_repo(remote_android_extensions, "android_tools")
+
+android_sdk_repository_extension = use_extension(
+    "@rules_android//rules/android_sdk_repository:rule.bzl",
+    "android_sdk_repository_extension",
+    dev_dependency = True,
+)
+use_repo(android_sdk_repository_extension, "androidsdk")
+fcp_android_sdk = use_extension("//fcp:android_sdk.bzl", "fcp_android_sdk", dev_dependency = True)
+use_repo(fcp_android_sdk, "fcp_androidsdk")
+override_repo(android_sdk_repository_extension, androidsdk = "fcp_androidsdk")
+# Work around oak's MODULE.bazel still importing the removed android_gmaven_r8 repo.
+inject_repo(remote_android_extensions, android_gmaven_r8 = "fcp_androidsdk")
+
+register_toolchains(
+    "@androidsdk//:sdk-toolchain",
+    "@androidsdk//:all",
+    dev_dependency = True,
+)

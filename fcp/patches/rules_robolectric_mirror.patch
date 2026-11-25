@@ -1,0 +1,39 @@
+# Why: rules_robolectric 4.18.1 downloads all instrumented Android framework
+# JARs from a single https://repo1.maven.org/maven2/ URL with no mirror
+# fallback, which triggers HTTP 429 rate-limit failures on shared CI runners.
+#
+# What: Updates robolectric_version() and robolectric_repositories() in
+# bazel/robolectric.bzl to pass `urls` with Google's Maven Central GCS mirror
+# (https://maven-central.storage-download.googleapis.com/maven2/) first and
+# repo1.maven.org as fallback, preserving all upstream sha256 digests.
+#
+# Origin: Authored for FCP (not copied from another repository).
+#
+# Removal: Can be removed once upstream rules_robolectric supports mirror URLs
+# or FCP's Bazel configuration supplies a Maven Central downloader mirror.
+diff --git a/bazel/robolectric.bzl b/bazel/robolectric.bzl
+--- a/bazel/robolectric.bzl
++++ b/bazel/robolectric.bzl
+@@ -19,9 +19,11 @@
+         fail("version must be provided!")
+     name = "org_robolectric_android_all_instrumented_%s" % version.replace(".", "_").replace("-", "_")
+ 
+-    if not url:
+-        url = "https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/%s/android-all-instrumented-%s.jar" % (version, version)
++    urls = [url] if url else [
++        "https://maven-central.storage-download.googleapis.com/maven2/org/robolectric/android-all-instrumented/%s/android-all-instrumented-%s.jar" % (version, version),
++        "https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/%s/android-all-instrumented-%s.jar" % (version, version),
++    ]
+     if not sha256:
+-        fail("sha256 must be provided for %s being downloaded from %s" % (name, url))
+-    return struct(name = name, version = version, url = url, sha256 = sha256)
++        fail("sha256 must be provided for %s being downloaded from %s" % (name, urls[0]))
++    return struct(name = name, version = version, url = urls[0], urls = urls, sha256 = sha256)
+ 
+@@ -87,5 +89,5 @@
+ def robolectric_repositories():
+     """Creates http_jar repositories for the given versions of Robolectric.
+     """
+     for v in DEFAULT_AVAILABLE_VERSIONS:
+-        http_file(name = v.name, url = v.url, downloaded_file_path = "android-all-instrumented-%s.jar" % (v.version), sha256 = v.sha256)
++        http_file(name = v.name, urls = v.urls, downloaded_file_path = "android-all-instrumented-%s.jar" % (v.version), sha256 = v.sha256)
