@@ -1,0 +1,132 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "7cedb14d3a57d9e30d9aafab774c013c",
+    "entities": [
+      {
+        "tableName": "Task",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `logSource` TEXT, `taskName` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "logSource",
+            "columnName": "logSource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "taskName",
+            "columnName": "taskName",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Task_logSource_taskName",
+            "unique": true,
+            "columnNames": [
+              "logSource",
+              "taskName"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_Task_logSource_taskName` ON `${TABLE_NAME}` (`logSource`, `taskName`)"
+          }
+        ]
+      },
+      {
+        "tableName": "EntryContribution",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `taskId` INTEGER NOT NULL, `valueId` INTEGER NOT NULL, `insertionTimeMillis` INTEGER NOT NULL, FOREIGN KEY(`taskId`) REFERENCES `Task`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskId",
+            "columnName": "taskId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "valueId",
+            "columnName": "valueId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "insertionTimeMillis",
+            "columnName": "insertionTimeMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_EntryContribution_taskId",
+            "unique": false,
+            "columnNames": [
+              "taskId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_EntryContribution_taskId` ON `${TABLE_NAME}` (`taskId`)"
+          },
+          {
+            "name": "index_EntryContribution_taskId_valueId",
+            "unique": true,
+            "columnNames": [
+              "taskId",
+              "valueId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_EntryContribution_taskId_valueId` ON `${TABLE_NAME}` (`taskId`, `valueId`)"
+          },
+          {
+            "name": "index_EntryContribution_insertionTimeMillis",
+            "unique": false,
+            "columnNames": [
+              "insertionTimeMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_EntryContribution_insertionTimeMillis` ON `${TABLE_NAME}` (`insertionTimeMillis`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "Task",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "taskId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7cedb14d3a57d9e30d9aafab774c013c')"
+    ]
+  }
+}

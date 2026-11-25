@@ -14,6 +14,7 @@
 
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@com_google_protobuf//bazel:java_lite_proto_library.bzl", "java_lite_proto_library")
 load("@com_google_protobuf//bazel:java_proto_library.bzl", "java_proto_library")
 load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
 load("@com_google_protobuf//bazel:py_proto_library.bzl", "py_proto_library")
@@ -700,6 +701,11 @@ cc_proto_library(
 proto_library(
     name = "diag_codes_proto",
     srcs = ["diag_codes.proto"],
+)
+
+java_lite_proto_library(
+    name = "diag_codes_java_proto_lite",
+    deps = [":diag_codes_proto"],
 )
 
 java_proto_library(
