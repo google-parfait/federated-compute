@@ -45,7 +45,7 @@ enum class DiagnosticCode : int {
   // A write to a SQLite store found a transaction already open on its shared
   // connection, i.e. one the client opened, and was refused
   // (FAILED_PRECONDITION) instead of joining it. The client must not keep
-  // transactions open on a connection it shares with PrivateLogger.
+  // transactions open on a connection it shares with FCP.
   kErrorSqliteTransactionOpen = 3000,
 };
 

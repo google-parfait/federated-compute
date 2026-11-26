@@ -32,15 +32,11 @@ namespace fcp::client::privatelogger {
 // holds the returned pointer.
 std::shared_ptr<absl::Mutex> GetOrCreateConnectionMutex(sqlite3* db);
 
-// Holds the SQLite connection's own recursive mutex (if SQLite was built with
-// one) for its lifetime, so that a SQLite call made on the same `sqlite3*`
-// connection outside this library, e.g. by another thread of the client, can't
-// run in the middle of one of our operations. It serializes single calls, not
-// the client's transactions: a transaction the client opens spans many calls
-// and stays open between them, and a write of ours would join it. So every
-// write first checks that no transaction is open (CheckNoTransactionOpen() in
-// sqlite_util.h), and the client must not keep a transaction open on a
-// connection it shares with this library. `db` may be null.
+// Holds the SQLite connection's own mutex (sqlite3_db_mutex()) for its
+// lifetime, so that the client's SQLite calls on the same connection from other
+// threads can't run in the middle of one of our operations. Does nothing if
+// the connection has no mutex (see https://www.sqlite.org/threadsafe.html) or
+// `db` is null.
 class ScopedSqliteConnectionLock {
  public:
   explicit ScopedSqliteConnectionLock(sqlite3* db);

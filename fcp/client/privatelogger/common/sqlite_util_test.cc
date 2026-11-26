@@ -27,6 +27,7 @@
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
@@ -186,6 +187,11 @@ TEST(SqliteUtilTest, PrepareStatementRejectsSqlWithoutAStatement) {
   }
 }
 
+TEST(SqliteUtilTest, PrepareStatementRejectsANullConnection) {
+  EXPECT_THAT(PrepareStatement(nullptr, "SELECT 1;"),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
 TEST(SqliteUtilTest, OpenSqliteDatabaseSetsTheBusyTimeout) {
   ScopedSqlite db = OpenInMemory();
   FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteStmt stmt,
@@ -324,6 +330,73 @@ TEST(ScopedSqliteTransactionTest, BeginFailsInsideATransactionAndKeepsIt) {
   EXPECT_EQ(CountRows(db.get(), "t"), 1);
 }
 
+TEST(ScopedSqliteTransactionTest, BeginRejectsANullConnection) {
+  EXPECT_THAT(ScopedSqliteTransaction::Begin(nullptr),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+// Creates table `t`, on which inserting x = 2 makes SQLite roll back the whole
+// transaction (RAISE(ROLLBACK)), as it does by itself after some errors.
+void CreateTableThatRollsBackOnTwo(sqlite3* db) {
+  Exec(db,
+       "CREATE TABLE t (x INTEGER);"
+       "CREATE TRIGGER roll_back BEFORE INSERT ON t WHEN NEW.x = 2 "
+       "BEGIN SELECT RAISE(ROLLBACK, 'rolled back by SQLite'); END;");
+}
+
+// A sqlite3_trace_v2() callback that counts the ROLLBACK statements run.
+int CountRollbackStatements(unsigned type, void* context, void* statement,
+                            void* sql) {
+  if (type == SQLITE_TRACE_STMT &&
+      absl::StartsWithIgnoreCase(static_cast<const char*>(sql), "ROLLBACK")) {
+    ++*static_cast<int*>(context);
+  }
+  return 0;
+}
+
+TEST(ScopedSqliteTransactionTest, DestructionAfterSqliteRolledBackDoesNothing) {
+  ScopedSqlite db = OpenInMemory();
+  CreateTableThatRollsBackOnTwo(db.get());
+  int rollback_statements = 0;
+  ASSERT_EQ(sqlite3_trace_v2(db.get(), SQLITE_TRACE_STMT,
+                             &CountRollbackStatements, &rollback_statements),
+            SQLITE_OK);
+  {
+    FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteTransaction transaction,
+                             ScopedSqliteTransaction::Begin(db.get()));
+    Exec(db.get(), "INSERT INTO t VALUES (1);");
+    EXPECT_THAT(ExecuteSql(db.get(), "INSERT INTO t VALUES (2);"),
+                StatusIs(absl::StatusCode::kInternal,
+                         HasSubstr("rolled back by SQLite")));
+    EXPECT_FALSE(TransactionOpen(db.get()));
+  }
+  // The destructor saw that no transaction was open and ran no ROLLBACK.
+  EXPECT_EQ(rollback_statements, 0);
+  EXPECT_FALSE(TransactionOpen(db.get()));
+  EXPECT_EQ(CountRows(db.get(), "t"), 0);
+
+  // The counting works: a transaction still open is rolled back.
+  {
+    FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteTransaction transaction,
+                             ScopedSqliteTransaction::Begin(db.get()));
+  }
+  EXPECT_EQ(rollback_statements, 1);
+  ASSERT_EQ(sqlite3_trace_v2(db.get(), 0, nullptr, nullptr), SQLITE_OK);
+}
+
+TEST(ScopedSqliteTransactionTest, CommitAfterSqliteRolledBackFails) {
+  ScopedSqlite db = OpenInMemory();
+  CreateTableThatRollsBackOnTwo(db.get());
+  FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteTransaction transaction,
+                           ScopedSqliteTransaction::Begin(db.get()));
+  Exec(db.get(), "INSERT INTO t VALUES (1);");
+  ASSERT_THAT(ExecuteSql(db.get(), "INSERT INTO t VALUES (2);"),
+              StatusIs(absl::StatusCode::kInternal));
+  EXPECT_THAT(transaction.Commit(), StatusIs(absl::StatusCode::kInternal));
+  EXPECT_FALSE(TransactionOpen(db.get()));
+  EXPECT_EQ(CountRows(db.get(), "t"), 0);
+}
+
 TEST(SqliteUtilTest, ExecuteSqlRunsAllStatementsAndReportsErrors) {
   ScopedSqlite db = OpenInMemory();
   EXPECT_THAT(ExecuteSql(db.get(),
@@ -336,6 +409,8 @@ TEST(SqliteUtilTest, ExecuteSqlRunsAllStatementsAndReportsErrors) {
               StatusIs(absl::StatusCode::kInternal,
                        AllOf(HasSubstr("SQLite execution failed"),
                              HasSubstr("syntax error"))));
+  EXPECT_THAT(ExecuteSql(nullptr, "SELECT 1;"),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 }  // namespace

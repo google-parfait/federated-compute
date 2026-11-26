@@ -79,9 +79,9 @@ absl::Status SqliteErrorStatus(sqlite3* db, absl::string_view message);
 // SQLite's API, else OK. Used by PrepareStatement() and the Bind functions.
 absl::Status CheckSqliteSize(size_t size, absl::string_view what);
 
-// Prepares the first SQL statement in `sql`. Returns INVALID_ARGUMENT if `sql`
-// contains no statement (it's empty or only whitespace or comments), and
-// INTERNAL with SQLite's error message if preparing fails.
+// Prepares the first SQL statement in `sql`. Returns INVALID_ARGUMENT if `db`
+// is null or `sql` contains no statement (it's empty or only whitespace or
+// comments), and INTERNAL with SQLite's error message if preparing fails.
 absl::StatusOr<ScopedSqliteStmt> PrepareStatement(sqlite3* db,
                                                   absl::string_view sql);
 
@@ -102,7 +102,7 @@ absl::Status BindInt64(sqlite3* db, sqlite3_stmt* stmt, int index,
 
 // Runs the SQL statements in `sql` (NUL-terminated, since sqlite3_exec() has
 // no length parameter). Returns INTERNAL with SQLite's error message if one
-// fails.
+// fails, and INVALID_ARGUMENT if `db` is null.
 absl::Status ExecuteSql(sqlite3* db, const char* sql);
 
 // A write transaction on a connection: Begin() starts it (BEGIN IMMEDIATE),
@@ -113,7 +113,8 @@ absl::Status ExecuteSql(sqlite3* db, const char* sql);
 class ScopedSqliteTransaction {
  public:
   // Returns INTERNAL if BEGIN IMMEDIATE fails, e.g. because a transaction is
-  // already open (which is left as it is) or the database is locked.
+  // already open (which is left as it is) or the database is locked, and
+  // INVALID_ARGUMENT if `db` is null.
   static absl::StatusOr<ScopedSqliteTransaction> Begin(sqlite3* db);
 
   ScopedSqliteTransaction(ScopedSqliteTransaction&& other) noexcept;

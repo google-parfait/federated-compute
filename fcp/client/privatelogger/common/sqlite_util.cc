@@ -117,6 +117,9 @@ absl::Status CheckSqliteSize(size_t size, absl::string_view what) {
 
 absl::StatusOr<ScopedSqliteStmt> PrepareStatement(sqlite3* db,
                                                   absl::string_view sql) {
+  if (db == nullptr) {
+    return absl::InvalidArgumentError("SQLite connection is null");
+  }
   ABSL_RETURN_IF_ERROR(CheckSqliteSize(sql.size(), "SQL statement"));
   sqlite3_stmt* raw_stmt = nullptr;
   if (sqlite3_prepare_v2(db, sql.data(), static_cast<int>(sql.size()),
@@ -186,6 +189,9 @@ absl::Status BindInt64(sqlite3* db, sqlite3_stmt* stmt, int index,
 }
 
 absl::Status ExecuteSql(sqlite3* db, const char* sql) {
+  if (db == nullptr) {
+    return absl::InvalidArgumentError("SQLite connection is null");
+  }
   char* error_msg = nullptr;
   if (sqlite3_exec(db, sql, nullptr, nullptr, &error_msg) != SQLITE_OK) {
     std::string error_str =

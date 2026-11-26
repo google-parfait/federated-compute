@@ -15,9 +15,12 @@
  */
 #include "fcp/client/privatelogger/log/sqlite_log_database.h"
 
+#include <atomic>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
+#include <thread>  // NOLINT(build/c++11)
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -286,6 +289,80 @@ TEST_F(SqliteLogDatabaseTest, CleanupCountsNeverContributedEntries) {
               IsOkAndHolds(0));
 }
 
+TEST_F(SqliteLogDatabaseTest, CleanupCountsRolledBackEntriesAsNotContributed) {
+  const absl::Time cutoff = now_ - absl::Hours(1);
+  Insert("rolled back", cutoff);
+  FCP_ASSERT_OK_AND_ASSIGN(SelectedLogEntries selected,
+                           Select("set", /*max_bytes=*/100));
+  ASSERT_THAT(Values(selected), ElementsAre("rolled back"));
+  ASSERT_THAT(db_->DeleteContributions("set", Ids(selected), NoDiagnostics()),
+              IsOk());
+  EXPECT_THAT(db_->DeleteEntriesOlderThan(cutoff, NoDiagnostics()),
+              IsOkAndHolds(1));
+}
+
+TEST_F(SqliteLogDatabaseTest, DeleteContributionsIgnoresUnmarkedAndUnknownIds) {
+  Insert("a", now_ - absl::Minutes(1));
+  Insert("b", now_);
+  // Gets both ids (marking them for "other" only), then marks "a" for "set".
+  FCP_ASSERT_OK_AND_ASSIGN(SelectedLogEntries selected,
+                           Select("other", /*max_bytes=*/100));
+  const std::vector<int64_t> ids = Ids(selected);
+  ASSERT_THAT(ids, SizeIs(2));
+  FCP_ASSERT_OK_AND_ASSIGN(selected, Select("set", /*max_bytes=*/1));
+  ASSERT_THAT(Values(selected), ElementsAre("a"));
+
+  // "b" isn't marked for "set", and the last id doesn't exist.
+  EXPECT_THAT(
+      db_->DeleteContributions("set", {ids[1], ids[1] + 1000}, NoDiagnostics()),
+      IsOk());
+  // "a" is still marked for "set", "b" still selectable for it.
+  FCP_ASSERT_OK_AND_ASSIGN(selected, Select("set", /*max_bytes=*/100));
+  EXPECT_THAT(Values(selected), ElementsAre("b"));
+  // Nothing changed for "other".
+  FCP_ASSERT_OK_AND_ASSIGN(selected, Select("other", /*max_bytes=*/100));
+  EXPECT_THAT(selected.entries, IsEmpty());
+}
+
+TEST_F(SqliteLogDatabaseTest, InfiniteCutoffs) {
+  Insert("a", now_);
+  Insert("b", now_ + absl::Minutes(1));
+  EXPECT_THAT(db_->CountEntriesNewerThan(absl::InfinitePast()),
+              IsOkAndHolds(2));
+  EXPECT_THAT(db_->CountEntriesNewerThan(absl::InfiniteFuture()),
+              IsOkAndHolds(0));
+  FCP_ASSERT_OK_AND_ASSIGN(
+      SelectedLogEntries selected,
+      Select("set", /*max_bytes=*/100, absl::InfiniteFuture()));
+  EXPECT_THAT(selected.entries, IsEmpty());
+  EXPECT_THAT(
+      db_->DeleteEntriesOlderThan(absl::InfinitePast(), NoDiagnostics()),
+      IsOkAndHolds(0));
+  EXPECT_THAT(db_->CountEntriesNewerThan(absl::InfinitePast()),
+              IsOkAndHolds(2));
+
+  FCP_ASSERT_OK_AND_ASSIGN(
+      selected, Select("set", /*max_bytes=*/1, absl::InfinitePast()));
+  ASSERT_THAT(Values(selected), ElementsAre("a"));
+  // Deletes everything; "b" was never selected.
+  EXPECT_THAT(
+      db_->DeleteEntriesOlderThan(absl::InfiniteFuture(), NoDiagnostics()),
+      IsOkAndHolds(1));
+  EXPECT_THAT(db_->CountEntriesNewerThan(absl::InfinitePast()),
+              IsOkAndHolds(0));
+}
+
+TEST_F(SqliteLogDatabaseTest, CutoffsAreComparedInMilliseconds) {
+  const absl::Time cutoff = now_ - absl::Hours(1);
+  // Less than a millisecond after the cutoff counts as at the cutoff.
+  Insert("same millisecond", cutoff + absl::Microseconds(500));
+  Insert("next millisecond", cutoff + absl::Milliseconds(1));
+  EXPECT_THAT(db_->CountEntriesNewerThan(cutoff), IsOkAndHolds(1));
+  FCP_ASSERT_OK_AND_ASSIGN(SelectedLogEntries selected,
+                           Select("set", /*max_bytes=*/100, cutoff));
+  EXPECT_THAT(Values(selected), ElementsAre("next millisecond"));
+}
+
 TEST_F(SqliteLogDatabaseTest, CountsEntriesNewerThanTheCutoff) {
   const absl::Time cutoff = now_ - absl::Hours(1);
   EXPECT_THAT(db_->CountEntriesNewerThan(cutoff), IsOkAndHolds(0));
@@ -384,6 +461,148 @@ TEST(SqliteLogDatabaseSharedConnectionTest,
   ASSERT_THAT(selected.entries, SizeIs(1));
   EXPECT_EQ(selected.entries[0].entry.value, "a");
   EXPECT_THAT(logger.codes(), SizeIs(4));
+}
+
+TEST(SqliteLogDatabaseSharedConnectionTest,
+     InstancesWithTheSamePrefixShareTheEntries) {
+  ScopedSqlite connection = OpenInMemory();
+  FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<SqliteLogDatabase> first,
+                           SqliteLogDatabase::Create(connection.get(), "p_"));
+  FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<SqliteLogDatabase> second,
+                           SqliteLogDatabase::Create(connection.get(), "p_"));
+  const absl::Time now = absl::FromUnixSeconds(1700000000);
+  ASSERT_THAT(first->InsertEntry(LogEntry{.timestamp = now, .value = "a"},
+                                 NoDiagnostics()),
+              IsOk());
+  EXPECT_THAT(second->CountEntriesNewerThan(absl::InfinitePast()),
+              IsOkAndHolds(1));
+  FCP_ASSERT_OK_AND_ASSIGN(SelectedLogEntries selected,
+                           second->GetAndMarkUncontributedEntries(
+                               "set", absl::InfinitePast(),
+                               /*max_bytes=*/100, NoDiagnostics()));
+  EXPECT_THAT(Values(selected), ElementsAre("a"));
+  // The mark is shared too.
+  FCP_ASSERT_OK_AND_ASSIGN(selected, first->GetAndMarkUncontributedEntries(
+                                         "set", absl::InfinitePast(),
+                                         /*max_bytes=*/100, NoDiagnostics()));
+  EXPECT_THAT(selected.entries, IsEmpty());
+}
+
+TEST(SqliteLogDatabaseSharedConnectionTest,
+     ConcurrentInsertsAndSelectsSelectEveryEntryOnce) {
+  // Without SQLite's connection mutex (SQLITE_OPEN_NOMUTEX), so that the
+  // per-connection lock shared by the instances is what serializes them.
+  sqlite3* raw_connection = nullptr;
+  ASSERT_EQ(sqlite3_open_v2(":memory:", &raw_connection,
+                            SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |
+                                SQLITE_OPEN_NOMUTEX,
+                            nullptr),
+            SQLITE_OK);
+  ScopedSqlite connection(raw_connection);
+  ASSERT_EQ(sqlite3_db_mutex(connection.get()), nullptr);
+  // Separate instances for the writers and the reader.
+  FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<SqliteLogDatabase> writer_db,
+                           SqliteLogDatabase::Create(connection.get()));
+  FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<SqliteLogDatabase> reader_db,
+                           SqliteLogDatabase::Create(connection.get()));
+  constexpr int kWriters = 4;
+  constexpr int kEntriesPerWriter = 50;
+  // Small batches, so that the selections interleave with the writes.
+  constexpr int64_t kMaxBytes = 16;
+  const absl::Time now = absl::FromUnixSeconds(1700000000);
+
+  std::map<std::string, int> selected_counts;
+  auto select = [&]() -> absl::StatusOr<bool> {
+    absl::StatusOr<SelectedLogEntries> selected =
+        reader_db->GetAndMarkUncontributedEntries("set", absl::InfinitePast(),
+                                                  kMaxBytes, NoDiagnostics());
+    if (!selected.ok()) {
+      return selected.status();
+    }
+    for (const StoredLogEntry& entry : selected->entries) {
+      ++selected_counts[entry.entry.value];
+    }
+    return !selected->entries.empty();
+  };
+
+  std::atomic<bool> writers_done = false;
+  std::thread reader([&] {
+    while (!writers_done.load(std::memory_order_acquire)) {
+      absl::StatusOr<bool> selected_any = select();
+      ASSERT_THAT(selected_any, IsOk());
+      if (!*selected_any) {
+        std::this_thread::yield();
+      }
+    }
+  });
+  std::vector<std::thread> writers;
+  for (int writer = 0; writer < kWriters; ++writer) {
+    writers.emplace_back([&writer_db, now, writer] {
+      for (int i = 0; i < kEntriesPerWriter; ++i) {
+        ASSERT_THAT(
+            writer_db->InsertEntry(LogEntry{.timestamp = now,
+                                            .value = std::to_string(writer) +
+                                                     "-" + std::to_string(i)},
+                                   NoDiagnostics()),
+            IsOk());
+      }
+    });
+  }
+  for (std::thread& writer : writers) {
+    writer.join();
+  }
+  writers_done.store(true, std::memory_order_release);
+  reader.join();
+  // Selects what's left.
+  while (true) {
+    FCP_ASSERT_OK_AND_ASSIGN(bool selected_any, select());
+    if (!selected_any) {
+      break;
+    }
+  }
+
+  std::map<std::string, int> expected;
+  for (int writer = 0; writer < kWriters; ++writer) {
+    for (int i = 0; i < kEntriesPerWriter; ++i) {
+      expected[std::to_string(writer) + "-" + std::to_string(i)] = 1;
+    }
+  }
+  EXPECT_EQ(selected_counts, expected);
+}
+
+TEST(SqliteLogDatabaseFileTest, PersistsAcrossReopeningWithTheSameSchema) {
+  const std::string path =
+      testing::TempDir() + "/sqlite_log_database_test_persists.db";
+  const absl::Time now = absl::FromUnixSeconds(1700000000);
+  {
+    FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<SqliteLogDatabase> db,
+                             SqliteLogDatabase::Create(path, "p_"));
+    ASSERT_THAT(db->InsertEntry(LogEntry{.timestamp = now, .value = "a"},
+                                NoDiagnostics()),
+                IsOk());
+    ASSERT_THAT(db->InsertEntry(LogEntry{.timestamp = now, .value = "b"},
+                                NoDiagnostics()),
+                IsOk());
+    FCP_ASSERT_OK_AND_ASSIGN(
+        SelectedLogEntries selected,
+        db->GetAndMarkUncontributedEntries("set", absl::InfinitePast(),
+                                           /*max_bytes=*/1, NoDiagnostics()));
+    ASSERT_THAT(Values(selected), ElementsAre("a"));
+  }
+
+  // Creating the schema again leaves the existing tables and rows alone.
+  FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<SqliteLogDatabase> db,
+                           SqliteLogDatabase::Create(path, "p_"));
+  EXPECT_THAT(db->CountEntriesNewerThan(absl::InfinitePast()), IsOkAndHolds(2));
+  FCP_ASSERT_OK_AND_ASSIGN(
+      SelectedLogEntries selected,
+      db->GetAndMarkUncontributedEntries("set", absl::InfinitePast(),
+                                         /*max_bytes=*/100, NoDiagnostics()));
+  EXPECT_THAT(Values(selected), ElementsAre("b"));
+  FCP_ASSERT_OK_AND_ASSIGN(selected, db->GetAndMarkUncontributedEntries(
+                                         "other", absl::InfinitePast(),
+                                         /*max_bytes=*/100, NoDiagnostics()));
+  EXPECT_THAT(Values(selected), ElementsAre("a", "b"));
 }
 
 TEST(SqliteLogDatabaseCleanupTest, DeletesOnlyTheExpiredContributions) {
