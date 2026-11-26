@@ -28,7 +28,9 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "fcp/client/diagnostics/diagnostic_logger.h"
+#include "fcp/client/diagnostics/test_diagnostic_loggers.h"
 #include "fcp/client/privatelogger/common/log_entry.h"
+#include "fcp/client/privatelogger/common/sqlite_test_util.h"
 #include "fcp/client/privatelogger/log/log_database.h"
 #include "fcp/testing/testing.h"
 #include "sqlite3.h"
@@ -37,45 +39,22 @@ namespace fcp::client::privatelogger {
 namespace {
 
 using ::fcp::client::diagnostics::DiagnosticCode;
-using ::fcp::client::diagnostics::DiagnosticLogger;
-using ::fcp::client::diagnostics::NoOpDiagnosticLogger;
+using ::fcp::client::diagnostics::NoDiagnostics;
+using ::fcp::client::diagnostics::RecordingDiagnosticLogger;
+using ::fcp::client::privatelogger::internal::CountRows;
+using ::fcp::client::privatelogger::internal::Exec;
+using ::fcp::client::privatelogger::internal::OpenInMemory;
+using ::fcp::client::privatelogger::internal::ScopedSqlite;
+using ::fcp::client::privatelogger::internal::TransactionOpen;
 
 using ::absl_testing::IsOk;
 using ::absl_testing::IsOkAndHolds;
 using ::absl_testing::StatusIs;
 using ::testing::ElementsAre;
+using ::testing::Field;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::SizeIs;
-
-// A DiagnosticLogger for calls whose codes the test doesn't check.
-DiagnosticLogger& NoDiagnostics() {
-  static NoOpDiagnosticLogger* const logger = new NoOpDiagnosticLogger();
-  return *logger;
-}
-
-// Records the logged codes. Used from one thread only.
-struct RecordingDiagnosticLogger : public DiagnosticLogger {
-  void LogCode(DiagnosticCode code) override { codes.push_back(code); }
-
-  std::vector<DiagnosticCode> codes;
-};
-
-struct SqliteCloser {
-  void operator()(sqlite3* db) const { sqlite3_close_v2(db); }
-};
-using ScopedSqlite = std::unique_ptr<sqlite3, SqliteCloser>;
-
-ScopedSqlite OpenInMemory() {
-  sqlite3* db = nullptr;
-  EXPECT_EQ(sqlite3_open(":memory:", &db), SQLITE_OK);
-  return ScopedSqlite(db);
-}
-
-void Exec(sqlite3* db, const char* sql) {
-  ASSERT_EQ(sqlite3_exec(db, sql, nullptr, nullptr, nullptr), SQLITE_OK)
-      << sqlite3_errmsg(db);
-}
 
 std::vector<std::string> Values(const SelectedLogEntries& selected) {
   std::vector<std::string> values;
@@ -360,7 +339,8 @@ TEST(SqliteLogDatabaseCreateTest,
               IsOkAndHolds(0));
 }
 
-TEST(SqliteLogDatabaseCreateTest, WritesFailWhileTheClientHasATransactionOpen) {
+TEST(SqliteLogDatabaseSharedConnectionTest,
+     WritesFailWhileTheClientHasATransactionOpen) {
   ScopedSqlite connection = OpenInMemory();
   FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<SqliteLogDatabase> db,
                            SqliteLogDatabase::Create(connection.get()));
@@ -374,17 +354,17 @@ TEST(SqliteLogDatabaseCreateTest, WritesFailWhileTheClientHasATransactionOpen) {
   // Each refused write logs the code exactly once.
   EXPECT_THAT(db->InsertEntry(LogEntry{.timestamp = now, .value = "b"}, logger),
               StatusIs(absl::StatusCode::kFailedPrecondition));
-  EXPECT_THAT(logger.codes, SizeIs(1));
+  EXPECT_THAT(logger.codes(), SizeIs(1));
   EXPECT_THAT(db->GetAndMarkUncontributedEntries("set", absl::InfinitePast(),
                                                  /*max_bytes=*/100, logger),
               StatusIs(absl::StatusCode::kFailedPrecondition));
-  EXPECT_THAT(logger.codes, SizeIs(2));
+  EXPECT_THAT(logger.codes(), SizeIs(2));
   EXPECT_THAT(db->DeleteContributions("set", {1}, logger),
               StatusIs(absl::StatusCode::kFailedPrecondition));
-  EXPECT_THAT(logger.codes, SizeIs(3));
+  EXPECT_THAT(logger.codes(), SizeIs(3));
   EXPECT_THAT(db->DeleteEntriesOlderThan(absl::InfiniteFuture(), logger),
               StatusIs(absl::StatusCode::kFailedPrecondition));
-  EXPECT_THAT(logger.codes,
+  EXPECT_THAT(logger.codes(),
               ElementsAre(DiagnosticCode::kErrorSqliteTransactionOpen,
                           DiagnosticCode::kErrorSqliteTransactionOpen,
                           DiagnosticCode::kErrorSqliteTransactionOpen,
@@ -403,7 +383,7 @@ TEST(SqliteLogDatabaseCreateTest, WritesFailWhileTheClientHasATransactionOpen) {
                                          /*max_bytes=*/100, logger));
   ASSERT_THAT(selected.entries, SizeIs(1));
   EXPECT_EQ(selected.entries[0].entry.value, "a");
-  EXPECT_THAT(logger.codes, SizeIs(4));
+  EXPECT_THAT(logger.codes(), SizeIs(4));
 }
 
 TEST(SqliteLogDatabaseCleanupTest, DeletesOnlyTheExpiredContributions) {
@@ -421,21 +401,14 @@ TEST(SqliteLogDatabaseCleanupTest, DeletesOnlyTheExpiredContributions) {
   ASSERT_THAT(
       db->GetAndMarkUncontributedEntries("set", absl::InfinitePast(),
                                          /*max_bytes=*/100, NoDiagnostics()),
-      IsOkAndHolds(::testing::Field(&SelectedLogEntries::entries, SizeIs(2))));
+      IsOkAndHolds(Field(&SelectedLogEntries::entries, SizeIs(2))));
 
   EXPECT_THAT(db->DeleteEntriesOlderThan(cutoff, NoDiagnostics()),
               IsOkAndHolds(0));
 
   // Only the retained entry's contribution record is left, so it isn't
   // selected again for that set.
-  sqlite3_stmt* raw_stmt = nullptr;
-  ASSERT_EQ(sqlite3_prepare_v2(connection.get(),
-                               "SELECT COUNT(*) FROM t_contributed_entries;",
-                               -1, &raw_stmt, nullptr),
-            SQLITE_OK);
-  ASSERT_EQ(sqlite3_step(raw_stmt), SQLITE_ROW);
-  EXPECT_EQ(sqlite3_column_int64(raw_stmt, 0), 1);
-  sqlite3_finalize(raw_stmt);
+  EXPECT_EQ(CountRows(connection.get(), "t_contributed_entries"), 1);
   FCP_ASSERT_OK_AND_ASSIGN(
       SelectedLogEntries selected,
       db->GetAndMarkUncontributedEntries("set", absl::InfinitePast(),
@@ -479,7 +452,7 @@ class SqliteLogDatabaseRollbackTest : public ::testing::Test {
         std::string(table) +
         (when.empty() ? "" : " WHEN " + std::string(when)) +
         " BEGIN SELECT RAISE(ABORT, 'injected failure'); END;";
-    Exec(connection_.get(), sql.c_str());
+    Exec(connection_.get(), sql);
   }
 
   void StopFailing() { Exec(connection_.get(), "DROP TRIGGER fail;"); }
@@ -487,10 +460,6 @@ class SqliteLogDatabaseRollbackTest : public ::testing::Test {
   // The id of the last entry Insert() added.
   int64_t LastInsertedId() {
     return sqlite3_last_insert_rowid(connection_.get());
-  }
-
-  bool TransactionOpen() {
-    return sqlite3_get_autocommit(connection_.get()) == 0;
   }
 
   const absl::Time now_ = absl::FromUnixSeconds(1700000000);
@@ -506,7 +475,7 @@ TEST_F(SqliteLogDatabaseRollbackTest, FailedMarkingRollsBack) {
   // The selection works and "a" is marked; marking "b" fails.
   EXPECT_THAT(Select("set"), StatusIs(absl::StatusCode::kInternal,
                                       HasSubstr("injected failure")));
-  EXPECT_FALSE(TransactionOpen());
+  EXPECT_FALSE(TransactionOpen(connection_.get()));
   EXPECT_THAT(db_->CountEntriesNewerThan(absl::InfinitePast()),
               IsOkAndHolds(2));
 
@@ -529,7 +498,7 @@ TEST_F(SqliteLogDatabaseRollbackTest, FailedDeleteContributionsRollsBack) {
   EXPECT_THAT(
       db_->DeleteContributions("set", {first_id, second_id}, NoDiagnostics()),
       StatusIs(absl::StatusCode::kInternal, HasSubstr("injected failure")));
-  EXPECT_FALSE(TransactionOpen());
+  EXPECT_FALSE(TransactionOpen(connection_.get()));
 
   // Both records are still there.
   StopFailing();
@@ -548,7 +517,7 @@ TEST_F(SqliteLogDatabaseRollbackTest, FailedCleanupRollsBack) {
   EXPECT_THAT(
       db_->DeleteEntriesOlderThan(cutoff, NoDiagnostics()),
       StatusIs(absl::StatusCode::kInternal, HasSubstr("injected failure")));
-  EXPECT_FALSE(TransactionOpen());
+  EXPECT_FALSE(TransactionOpen(connection_.get()));
 
   // The expired entry and its contribution record are still there.
   EXPECT_THAT(db_->CountEntriesNewerThan(absl::InfinitePast()),

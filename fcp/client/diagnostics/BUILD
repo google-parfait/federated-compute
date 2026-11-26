@@ -27,3 +27,16 @@ cc_library(
     copts = FCP_COPTS,
     visibility = ["//visibility:public"],
 )
+
+# Diagnostic loggers for tests: a recording one and a shared no-op one.
+cc_library(
+    name = "test_diagnostic_loggers",
+    testonly = True,
+    hdrs = ["test_diagnostic_loggers.h"],
+    copts = FCP_COPTS,
+    deps = [
+        ":diagnostic_logger",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/synchronization",
+    ],
+)

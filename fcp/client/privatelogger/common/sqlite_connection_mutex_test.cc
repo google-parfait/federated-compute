@@ -20,26 +20,14 @@
 
 #include "gtest/gtest.h"
 #include "absl/synchronization/mutex.h"
+#include "fcp/client/privatelogger/common/sqlite_test_util.h"
 #include "sqlite3.h"
 
 namespace fcp::client::privatelogger {
 namespace {
 
-struct SqliteCloser {
-  void operator()(sqlite3* db) const { sqlite3_close_v2(db); }
-};
-using ScopedSqlite = std::unique_ptr<sqlite3, SqliteCloser>;
-
-// Opens an in-memory connection with its own connection mutex.
-ScopedSqlite OpenInMemory() {
-  sqlite3* db = nullptr;
-  EXPECT_EQ(sqlite3_open_v2(":memory:", &db,
-                            SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |
-                                SQLITE_OPEN_FULLMUTEX,
-                            nullptr),
-            SQLITE_OK);
-  return ScopedSqlite(db);
-}
+using ::fcp::client::privatelogger::internal::OpenInMemory;
+using ::fcp::client::privatelogger::internal::ScopedSqlite;
 
 TEST(SqliteConnectionMutexTest, SameConnectionGetsTheSameMutex) {
   ScopedSqlite db = OpenInMemory();

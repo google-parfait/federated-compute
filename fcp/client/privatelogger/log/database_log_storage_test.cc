@@ -33,19 +33,24 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "fcp/client/diagnostics/diagnostic_logger.h"
+#include "fcp/client/diagnostics/test_diagnostic_loggers.h"
 #include "fcp/client/privatelogger/common/log_entry.h"
+#include "fcp/client/privatelogger/common/sqlite_test_util.h"
 #include "fcp/client/privatelogger/log/log_database.h"
 #include "fcp/client/privatelogger/log/log_storage.h"
 #include "fcp/client/privatelogger/log/sqlite_log_database.h"
 #include "fcp/testing/testing.h"
-#include "sqlite3.h"
 
 namespace fcp::client::privatelogger {
 namespace {
 
 using ::fcp::client::diagnostics::DiagnosticCode;
 using ::fcp::client::diagnostics::DiagnosticLogger;
-using ::fcp::client::diagnostics::NoOpDiagnosticLogger;
+using ::fcp::client::diagnostics::NoDiagnostics;
+using ::fcp::client::diagnostics::RecordingDiagnosticLogger;
+using ::fcp::client::privatelogger::internal::Exec;
+using ::fcp::client::privatelogger::internal::OpenInMemory;
+using ::fcp::client::privatelogger::internal::ScopedSqlite;
 
 using ::absl_testing::IsOk;
 using ::absl_testing::IsOkAndHolds;
@@ -53,19 +58,6 @@ using ::absl_testing::StatusIs;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::SizeIs;
-
-// A DiagnosticLogger for calls whose codes the test doesn't check.
-DiagnosticLogger& NoDiagnostics() {
-  static NoOpDiagnosticLogger* const logger = new NoOpDiagnosticLogger();
-  return *logger;
-}
-
-// Records the logged codes. Used from one thread only.
-struct RecordingDiagnosticLogger : public DiagnosticLogger {
-  void LogCode(DiagnosticCode code) override { codes.push_back(code); }
-
-  std::vector<DiagnosticCode> codes;
-};
 
 std::vector<std::string> Values(const UploadBatch& batch) {
   std::vector<std::string> values;
@@ -337,23 +329,11 @@ TEST(DatabaseLogStorageErrorTest, PropagatesDatabaseErrorsWithoutLogging) {
   // The caller's logger was passed through to every write, and the storage
   // logged nothing itself: logging the error is the caller's job.
   EXPECT_THAT(database_ptr->loggers(), ElementsAre(&logger, &logger, &logger));
-  EXPECT_THAT(logger.codes, IsEmpty());
-}
-
-struct SqliteCloser {
-  void operator()(sqlite3* db) const { sqlite3_close_v2(db); }
-};
-using ScopedSqlite = std::unique_ptr<sqlite3, SqliteCloser>;
-
-void Exec(sqlite3* db, const char* sql) {
-  ASSERT_EQ(sqlite3_exec(db, sql, nullptr, nullptr, nullptr), SQLITE_OK)
-      << sqlite3_errmsg(db);
+  EXPECT_THAT(logger.codes(), IsEmpty());
 }
 
 TEST(DatabaseLogStorageErrorTest, DatabaseCausesAreLoggedExactlyOnce) {
-  sqlite3* raw_connection = nullptr;
-  ASSERT_EQ(sqlite3_open(":memory:", &raw_connection), SQLITE_OK);
-  ScopedSqlite connection(raw_connection);
+  ScopedSqlite connection = OpenInMemory();
   FCP_ASSERT_OK_AND_ASSIGN(std::unique_ptr<SqliteLogDatabase> database,
                            SqliteLogDatabase::Create(connection.get()));
   DatabaseLogStorage storage(std::move(database));
@@ -372,23 +352,23 @@ TEST(DatabaseLogStorageErrorTest, DatabaseCausesAreLoggedExactlyOnce) {
   RecordingDiagnosticLogger logger;
   EXPECT_THAT(storage.Log(LogEntry{.timestamp = kNow, .value = "b"}, logger),
               StatusIs(absl::StatusCode::kFailedPrecondition));
-  EXPECT_THAT(logger.codes, SizeIs(1));
+  EXPECT_THAT(logger.codes(), SizeIs(1));
   EXPECT_THAT(
       storage.GetLogsToUpload("other", kCutoff, /*max_bytes=*/100, logger),
       StatusIs(absl::StatusCode::kFailedPrecondition));
-  EXPECT_THAT(logger.codes, SizeIs(2));
+  EXPECT_THAT(logger.codes(), SizeIs(2));
   EXPECT_THAT(storage.CleanUp(CleanupMode::kImmediate, kCutoff, logger),
               StatusIs(absl::StatusCode::kFailedPrecondition));
-  EXPECT_THAT(logger.codes, SizeIs(3));
+  EXPECT_THAT(logger.codes(), SizeIs(3));
   // The rollback logs to the logger it's given, not the one of the selection.
   RecordingDiagnosticLogger rollback_logger;
   EXPECT_THAT(batch.RollBack(rollback_logger),
               StatusIs(absl::StatusCode::kFailedPrecondition));
-  EXPECT_THAT(logger.codes,
+  EXPECT_THAT(logger.codes(),
               ElementsAre(DiagnosticCode::kErrorSqliteTransactionOpen,
                           DiagnosticCode::kErrorSqliteTransactionOpen,
                           DiagnosticCode::kErrorSqliteTransactionOpen));
-  EXPECT_THAT(rollback_logger.codes,
+  EXPECT_THAT(rollback_logger.codes(),
               ElementsAre(DiagnosticCode::kErrorSqliteTransactionOpen));
   Exec(connection.get(), "COMMIT;");
 }

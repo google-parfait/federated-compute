@@ -18,11 +18,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <memory>
 #include <string>
 #include <thread>  // NOLINT(build/c++11)
 #include <utility>
-#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -34,6 +32,8 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/client/diagnostics/diagnostic_logger.h"
+#include "fcp/client/diagnostics/test_diagnostic_loggers.h"
+#include "fcp/client/privatelogger/common/sqlite_test_util.h"
 #include "fcp/testing/testing.h"
 #include "sqlite3.h"
 
@@ -41,7 +41,7 @@ namespace fcp::client::privatelogger::internal {
 namespace {
 
 using ::fcp::client::diagnostics::DiagnosticCode;
-using ::fcp::client::diagnostics::DiagnosticLogger;
+using ::fcp::client::diagnostics::RecordingDiagnosticLogger;
 
 using ::absl_testing::IsOk;
 using ::absl_testing::StatusIs;
@@ -51,25 +51,8 @@ using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::SizeIs;
 
-struct SqliteCloser {
-  void operator()(sqlite3* db) const { sqlite3_close_v2(db); }
-};
-using ScopedSqlite = std::unique_ptr<sqlite3, SqliteCloser>;
-
-ScopedSqlite Open(absl::string_view path) {
-  absl::StatusOr<sqlite3*> db = OpenSqliteDatabase(path);
-  EXPECT_THAT(db, IsOk());
-  return ScopedSqlite(db.ok() ? *db : nullptr);
-}
-
-void Exec(sqlite3* db, const std::string& sql) {
-  char* error = nullptr;
-  ASSERT_EQ(sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &error), SQLITE_OK)
-      << (error != nullptr ? error : "");
-}
-
 TEST(SqliteUtilTest, BindAndReadRoundTrip) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   Exec(db.get(),
        "CREATE TABLE t (text_value TEXT, int_value INTEGER, "
        "blob_value BLOB);");
@@ -109,7 +92,7 @@ TEST(SqliteUtilTest, BindAndReadRoundTrip) {
 }
 
 TEST(SqliteUtilTest, NullColumnsReadAsEmpty) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteStmt select,
                            PrepareStatement(db.get(), "SELECT NULL, NULL;"));
   ASSERT_EQ(sqlite3_step(select.get()), SQLITE_ROW);
@@ -118,7 +101,7 @@ TEST(SqliteUtilTest, NullColumnsReadAsEmpty) {
 }
 
 TEST(SqliteUtilTest, EmptyColumnsReadAsEmpty) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteStmt select,
                            PrepareStatement(db.get(), "SELECT '', X'';"));
   ASSERT_EQ(sqlite3_step(select.get()), SQLITE_ROW);
@@ -167,7 +150,7 @@ TEST(SqliteUtilTest, ValidateTablePrefix) {
 }
 
 TEST(SqliteUtilTest, ValidTablePrefixesGiveValidTableNames) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   for (absl::string_view prefix : kValidTablePrefixes) {
     Exec(db.get(),
          absl::StrCat("CREATE TABLE ", prefix, "log_entries (x INTEGER);",
@@ -184,7 +167,7 @@ TEST(SqliteUtilTest, ValidTablePrefixesGiveValidTableNames) {
 }
 
 TEST(SqliteUtilTest, SqliteErrorStatusIncludesTheSqliteMessage) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   absl::StatusOr<ScopedSqliteStmt> stmt =
       PrepareStatement(db.get(), "NOT VALID SQL");
   EXPECT_THAT(stmt, StatusIs(absl::StatusCode::kInternal,
@@ -195,7 +178,7 @@ TEST(SqliteUtilTest, SqliteErrorStatusIncludesTheSqliteMessage) {
 }
 
 TEST(SqliteUtilTest, PrepareStatementRejectsSqlWithoutAStatement) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   for (absl::string_view sql : {"", "   \n\t", "-- comment", "/* comment */"}) {
     EXPECT_THAT(PrepareStatement(db.get(), sql),
                 StatusIs(absl::StatusCode::kInvalidArgument))
@@ -204,7 +187,7 @@ TEST(SqliteUtilTest, PrepareStatementRejectsSqlWithoutAStatement) {
 }
 
 TEST(SqliteUtilTest, OpenSqliteDatabaseSetsTheBusyTimeout) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteStmt stmt,
                            PrepareStatement(db.get(), "PRAGMA busy_timeout;"));
   ASSERT_EQ(sqlite3_step(stmt.get()), SQLITE_ROW);
@@ -230,8 +213,8 @@ TEST(SqliteUtilTest, OpenSqliteDatabaseRejectsPathsWithNul) {
 
 TEST(SqliteUtilTest, SecondConnectionWaitsForTheLock) {
   const std::string path = absl::StrCat(testing::TempDir(), "/busy.db");
-  ScopedSqlite holder = Open(path);
-  ScopedSqlite waiter = Open(path);
+  ScopedSqlite holder = OpenSqliteForTest(path);
+  ScopedSqlite waiter = OpenSqliteForTest(path);
   Exec(holder.get(), "CREATE TABLE IF NOT EXISTS t (x INTEGER);");
 
   // `holder` keeps a write transaction open for a while; `waiter`'s write
@@ -252,55 +235,35 @@ TEST(SqliteUtilTest, SecondConnectionWaitsForTheLock) {
   EXPECT_LT(waited, kSqliteBusyTimeout);
 }
 
-// Records the logged codes. Used from one thread only.
-struct RecordingDiagnosticLogger : public DiagnosticLogger {
-  void LogCode(DiagnosticCode code) override { codes.push_back(code); }
-
-  std::vector<DiagnosticCode> codes;
-};
-
 TEST(SqliteUtilTest, CheckNoTransactionOpen) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   RecordingDiagnosticLogger logger;
   EXPECT_THAT(CheckNoTransactionOpen(db.get(), logger), IsOk());
-  EXPECT_THAT(logger.codes, IsEmpty());
+  EXPECT_THAT(logger.codes(), IsEmpty());
 
   // Inside a transaction: refused, with the code logged exactly once.
   Exec(db.get(), "BEGIN;");
   EXPECT_THAT(CheckNoTransactionOpen(db.get(), logger),
               StatusIs(absl::StatusCode::kFailedPrecondition,
                        HasSubstr("transaction is already open")));
-  EXPECT_THAT(logger.codes,
+  EXPECT_THAT(logger.codes(),
               ElementsAre(DiagnosticCode::kErrorSqliteTransactionOpen));
 
   // After the commit it's fine again, and nothing more is logged.
   Exec(db.get(), "COMMIT;");
   EXPECT_THAT(CheckNoTransactionOpen(db.get(), logger), IsOk());
-  EXPECT_THAT(logger.codes, SizeIs(1));
+  EXPECT_THAT(logger.codes(), SizeIs(1));
 }
 
 TEST(SqliteUtilTest, CheckNoTransactionOpenRejectsANullConnection) {
   RecordingDiagnosticLogger logger;
   EXPECT_THAT(CheckNoTransactionOpen(nullptr, logger),
               StatusIs(absl::StatusCode::kInvalidArgument));
-  EXPECT_THAT(logger.codes, IsEmpty());
+  EXPECT_THAT(logger.codes(), IsEmpty());
 }
-
-int64_t CountRows(sqlite3* db, absl::string_view table) {
-  absl::StatusOr<ScopedSqliteStmt> stmt =
-      PrepareStatement(db, absl::StrCat("SELECT COUNT(*) FROM ", table, ";"));
-  EXPECT_THAT(stmt, IsOk());
-  if (!stmt.ok() || sqlite3_step(stmt->get()) != SQLITE_ROW) {
-    ADD_FAILURE() << "Counting the rows of " << table << " failed";
-    return -1;
-  }
-  return sqlite3_column_int64(stmt->get(), 0);
-}
-
-bool TransactionOpen(sqlite3* db) { return sqlite3_get_autocommit(db) == 0; }
 
 TEST(ScopedSqliteTransactionTest, CommitKeepsTheChanges) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   Exec(db.get(), "CREATE TABLE t (x INTEGER);");
   {
     FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteTransaction transaction,
@@ -317,7 +280,7 @@ TEST(ScopedSqliteTransactionTest, CommitKeepsTheChanges) {
 }
 
 TEST(ScopedSqliteTransactionTest, DestructionWithoutCommitRollsBack) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   Exec(db.get(), "CREATE TABLE t (x INTEGER);");
   {
     FCP_ASSERT_OK_AND_ASSIGN(ScopedSqliteTransaction transaction,
@@ -332,7 +295,7 @@ TEST(ScopedSqliteTransactionTest, DestructionWithoutCommitRollsBack) {
 }
 
 TEST(ScopedSqliteTransactionTest, FailedCommitRollsBack) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   // A deferred foreign key violation makes COMMIT fail, leaving the
   // transaction open.
   Exec(db.get(),
@@ -350,7 +313,7 @@ TEST(ScopedSqliteTransactionTest, FailedCommitRollsBack) {
 }
 
 TEST(ScopedSqliteTransactionTest, BeginFailsInsideATransactionAndKeepsIt) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   Exec(db.get(), "CREATE TABLE t (x INTEGER);");
   Exec(db.get(), "BEGIN; INSERT INTO t VALUES (1);");
   EXPECT_THAT(ScopedSqliteTransaction::Begin(db.get()),
@@ -362,7 +325,7 @@ TEST(ScopedSqliteTransactionTest, BeginFailsInsideATransactionAndKeepsIt) {
 }
 
 TEST(SqliteUtilTest, ExecuteSqlRunsAllStatementsAndReportsErrors) {
-  ScopedSqlite db = Open(":memory:");
+  ScopedSqlite db = OpenInMemory();
   EXPECT_THAT(ExecuteSql(db.get(),
                          "CREATE TABLE t (x INTEGER);"
                          "INSERT INTO t VALUES (1);"

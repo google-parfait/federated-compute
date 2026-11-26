@@ -56,8 +56,10 @@ cc_test(
     srcs = ["sqlite_util_test.cc"],
     copts = FCP_COPTS,
     deps = [
+        ":sqlite_test_util",
         ":sqlite_util",
         "//fcp/client/diagnostics:diagnostic_logger",
+        "//fcp/client/diagnostics:test_diagnostic_loggers",
         "//fcp/testing",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:status_matchers",
@@ -92,8 +94,28 @@ cc_test(
     copts = FCP_COPTS,
     deps = [
         ":sqlite_connection_mutex",
+        ":sqlite_test_util",
         "@com_google_absl//absl/synchronization",
         "@com_google_googletest//:gtest_main",
+        "@sqlite3",
+    ],
+)
+
+# SQLite helpers for the tests of the SQLite-backed stores.
+cc_library(
+    name = "sqlite_test_util",
+    testonly = True,
+    srcs = ["sqlite_test_util.cc"],
+    hdrs = ["sqlite_test_util.h"],
+    copts = FCP_COPTS,
+    visibility = ["//fcp/client/privatelogger:__subpackages__"],
+    deps = [
+        ":sqlite_util",
+        "@com_google_absl//absl/status:status_matchers",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_for_library",
         "@sqlite3",
     ],
 )
