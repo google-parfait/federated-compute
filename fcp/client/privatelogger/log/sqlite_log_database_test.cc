@@ -30,10 +30,10 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_test_util.h"
 #include "fcp/client/diagnostics/diagnostic_logger.h"
 #include "fcp/client/diagnostics/test_diagnostic_loggers.h"
 #include "fcp/client/privatelogger/common/log_entry.h"
-#include "fcp/client/privatelogger/common/sqlite_test_util.h"
 #include "fcp/client/privatelogger/log/log_database.h"
 #include "fcp/testing/testing.h"
 #include "sqlite3.h"
@@ -41,14 +41,14 @@
 namespace fcp::client::privatelogger {
 namespace {
 
+using ::fcp::client::confidentialcompute::internal::CountRows;
+using ::fcp::client::confidentialcompute::internal::Exec;
+using ::fcp::client::confidentialcompute::internal::OpenInMemory;
+using ::fcp::client::confidentialcompute::internal::ScopedSqlite;
+using ::fcp::client::confidentialcompute::internal::TransactionOpen;
 using ::fcp::client::diagnostics::DiagnosticCode;
 using ::fcp::client::diagnostics::NoDiagnostics;
 using ::fcp::client::diagnostics::RecordingDiagnosticLogger;
-using ::fcp::client::privatelogger::internal::CountRows;
-using ::fcp::client::privatelogger::internal::Exec;
-using ::fcp::client::privatelogger::internal::OpenInMemory;
-using ::fcp::client::privatelogger::internal::ScopedSqlite;
-using ::fcp::client::privatelogger::internal::TransactionOpen;
 
 using ::absl_testing::IsOk;
 using ::absl_testing::IsOkAndHolds;

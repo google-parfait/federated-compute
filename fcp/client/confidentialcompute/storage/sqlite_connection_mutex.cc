@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "fcp/client/privatelogger/common/sqlite_connection_mutex.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_connection_mutex.h"
 
 #include <memory>
 
@@ -23,7 +23,7 @@
 #include "absl/synchronization/mutex.h"
 #include "sqlite3.h"
 
-namespace fcp::client::privatelogger {
+namespace fcp::client::confidentialcompute::internal {
 
 std::shared_ptr<absl::Mutex> GetOrCreateConnectionMutex(sqlite3* db) {
   static absl::NoDestructor<absl::Mutex> registry_mutex;
@@ -52,4 +52,4 @@ ScopedSqliteConnectionLock::~ScopedSqliteConnectionLock() {
   sqlite3_mutex_leave(mutex_);
 }
 
-}  // namespace fcp::client::privatelogger
+}  // namespace fcp::client::confidentialcompute::internal

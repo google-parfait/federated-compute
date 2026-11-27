@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FCP_CLIENT_PRIVATELOGGER_COMMON_SQLITE_CONNECTION_MUTEX_H_
-#define FCP_CLIENT_PRIVATELOGGER_COMMON_SQLITE_CONNECTION_MUTEX_H_
+#ifndef FCP_CLIENT_CONFIDENTIALCOMPUTE_STORAGE_SQLITE_CONNECTION_MUTEX_H_
+#define FCP_CLIENT_CONFIDENTIALCOMPUTE_STORAGE_SQLITE_CONNECTION_MUTEX_H_
 
 #include <memory>
 
@@ -23,7 +23,7 @@
 struct sqlite3;
 struct sqlite3_mutex;
 
-namespace fcp::client::privatelogger {
+namespace fcp::client::confidentialcompute::internal {
 
 // Returns a mutex shared by everything in this library that wraps the same
 // `sqlite3*` connection (e.g. two stores sharing one connection), so that
@@ -50,6 +50,6 @@ class ScopedSqliteConnectionLock {
   sqlite3_mutex* mutex_;
 };
 
-}  // namespace fcp::client::privatelogger
+}  // namespace fcp::client::confidentialcompute::internal
 
-#endif  // FCP_CLIENT_PRIVATELOGGER_COMMON_SQLITE_CONNECTION_MUTEX_H_
+#endif  // FCP_CLIENT_CONFIDENTIALCOMPUTE_STORAGE_SQLITE_CONNECTION_MUTEX_H_

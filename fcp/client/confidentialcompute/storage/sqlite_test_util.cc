@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "fcp/client/privatelogger/common/sqlite_test_util.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_test_util.h"
 
 #include <cstdint>
 #include <string>
@@ -24,10 +24,10 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "fcp/client/privatelogger/common/sqlite_util.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_util.h"
 #include "sqlite3.h"
 
-namespace fcp::client::privatelogger::internal {
+namespace fcp::client::confidentialcompute::internal {
 
 using ::absl_testing::IsOk;
 
@@ -58,4 +58,4 @@ int64_t CountRows(sqlite3* db, absl::string_view table) {
   return sqlite3_column_int64(stmt->get(), 0);
 }
 
-}  // namespace fcp::client::privatelogger::internal
+}  // namespace fcp::client::confidentialcompute::internal

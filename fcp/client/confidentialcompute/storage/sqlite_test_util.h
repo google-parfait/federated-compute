@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FCP_CLIENT_PRIVATELOGGER_COMMON_SQLITE_TEST_UTIL_H_
-#define FCP_CLIENT_PRIVATELOGGER_COMMON_SQLITE_TEST_UTIL_H_
+#ifndef FCP_CLIENT_CONFIDENTIALCOMPUTE_STORAGE_SQLITE_TEST_UTIL_H_
+#define FCP_CLIENT_CONFIDENTIALCOMPUTE_STORAGE_SQLITE_TEST_UTIL_H_
 
 #include <cstdint>
 #include <memory>
@@ -25,7 +25,7 @@
 struct sqlite3;
 
 // SQLite helpers for tests. The functions report errors as test failures.
-namespace fcp::client::privatelogger::internal {
+namespace fcp::client::confidentialcompute::internal {
 
 struct SqliteCloser {
   void operator()(sqlite3* db) const;
@@ -52,6 +52,6 @@ bool TransactionOpen(sqlite3* db);
 // Returns the number of rows in `table`, or -1 if counting fails.
 int64_t CountRows(sqlite3* db, absl::string_view table);
 
-}  // namespace fcp::client::privatelogger::internal
+}  // namespace fcp::client::confidentialcompute::internal
 
-#endif  // FCP_CLIENT_PRIVATELOGGER_COMMON_SQLITE_TEST_UTIL_H_
+#endif  // FCP_CLIENT_CONFIDENTIALCOMPUTE_STORAGE_SQLITE_TEST_UTIL_H_

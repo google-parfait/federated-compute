@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "fcp/client/privatelogger/common/sqlite_util.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_util.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -32,13 +32,13 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_test_util.h"
 #include "fcp/client/diagnostics/diagnostic_logger.h"
 #include "fcp/client/diagnostics/test_diagnostic_loggers.h"
-#include "fcp/client/privatelogger/common/sqlite_test_util.h"
 #include "fcp/testing/testing.h"
 #include "sqlite3.h"
 
-namespace fcp::client::privatelogger::internal {
+namespace fcp::client::confidentialcompute::internal {
 namespace {
 
 using ::fcp::client::diagnostics::DiagnosticCode;
@@ -414,4 +414,4 @@ TEST(SqliteUtilTest, ExecuteSqlRunsAllStatementsAndReportsErrors) {
 }
 
 }  // namespace
-}  // namespace fcp::client::privatelogger::internal
+}  // namespace fcp::client::confidentialcompute::internal

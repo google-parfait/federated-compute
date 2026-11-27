@@ -30,28 +30,30 @@
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_connection_mutex.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_util.h"
 #include "fcp/client/diagnostics/diagnostic_logger.h"
 #include "fcp/client/privatelogger/common/log_entry.h"
-#include "fcp/client/privatelogger/common/sqlite_connection_mutex.h"
-#include "fcp/client/privatelogger/common/sqlite_util.h"
 #include "fcp/client/privatelogger/log/log_database.h"
 #include "sqlite3.h"
 
 namespace fcp::client::privatelogger {
 namespace {
 
-using ::fcp::client::privatelogger::internal::BindBlob;
-using ::fcp::client::privatelogger::internal::BindInt64;
-using ::fcp::client::privatelogger::internal::BindText;
-using ::fcp::client::privatelogger::internal::CheckNoTransactionOpen;
-using ::fcp::client::privatelogger::internal::ColumnBlob;
-using ::fcp::client::privatelogger::internal::ExecuteSql;
-using ::fcp::client::privatelogger::internal::OpenSqliteDatabase;
-using ::fcp::client::privatelogger::internal::PrepareStatement;
-using ::fcp::client::privatelogger::internal::ScopedSqliteStmt;
-using ::fcp::client::privatelogger::internal::ScopedSqliteTransaction;
-using ::fcp::client::privatelogger::internal::SqliteErrorStatus;
-using ::fcp::client::privatelogger::internal::ValidateTablePrefix;
+using ::fcp::client::confidentialcompute::internal::BindBlob;
+using ::fcp::client::confidentialcompute::internal::BindInt64;
+using ::fcp::client::confidentialcompute::internal::BindText;
+using ::fcp::client::confidentialcompute::internal::CheckNoTransactionOpen;
+using ::fcp::client::confidentialcompute::internal::ColumnBlob;
+using ::fcp::client::confidentialcompute::internal::ExecuteSql;
+using ::fcp::client::confidentialcompute::internal::GetOrCreateConnectionMutex;
+using ::fcp::client::confidentialcompute::internal::OpenSqliteDatabase;
+using ::fcp::client::confidentialcompute::internal::PrepareStatement;
+using ::fcp::client::confidentialcompute::internal::ScopedSqliteConnectionLock;
+using ::fcp::client::confidentialcompute::internal::ScopedSqliteStmt;
+using ::fcp::client::confidentialcompute::internal::ScopedSqliteTransaction;
+using ::fcp::client::confidentialcompute::internal::SqliteErrorStatus;
+using ::fcp::client::confidentialcompute::internal::ValidateTablePrefix;
 
 }  // namespace
 

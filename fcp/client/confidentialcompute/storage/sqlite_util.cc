@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "fcp/client/privatelogger/common/sqlite_util.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_util.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -32,7 +32,7 @@
 #include "fcp/client/diagnostics/diagnostic_logger.h"
 #include "sqlite3.h"
 
-namespace fcp::client::privatelogger::internal {
+namespace fcp::client::confidentialcompute::internal {
 
 void SqliteStmtDeleter::operator()(sqlite3_stmt* stmt) const {
   sqlite3_finalize(stmt);
@@ -242,4 +242,4 @@ absl::Status ScopedSqliteTransaction::Commit() {
   return status;
 }
 
-}  // namespace fcp::client::privatelogger::internal
+}  // namespace fcp::client::confidentialcompute::internal

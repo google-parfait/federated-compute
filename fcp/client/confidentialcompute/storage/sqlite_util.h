@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FCP_CLIENT_PRIVATELOGGER_COMMON_SQLITE_UTIL_H_
-#define FCP_CLIENT_PRIVATELOGGER_COMMON_SQLITE_UTIL_H_
+#ifndef FCP_CLIENT_CONFIDENTIALCOMPUTE_STORAGE_SQLITE_UTIL_H_
+#define FCP_CLIENT_CONFIDENTIALCOMPUTE_STORAGE_SQLITE_UTIL_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -30,9 +30,9 @@
 struct sqlite3;
 struct sqlite3_stmt;
 
-// SQLite helpers shared by PrivateLogger's SQLite-backed stores. Not part of
+// SQLite helpers shared by the FCP client's SQLite-backed stores. Not part of
 // the public API.
-namespace fcp::client::privatelogger::internal {
+namespace fcp::client::confidentialcompute::internal {
 
 struct SqliteStmtDeleter {
   void operator()(sqlite3_stmt* stmt) const;
@@ -137,6 +137,6 @@ class ScopedSqliteTransaction {
   sqlite3* db_;
 };
 
-}  // namespace fcp::client::privatelogger::internal
+}  // namespace fcp::client::confidentialcompute::internal
 
-#endif  // FCP_CLIENT_PRIVATELOGGER_COMMON_SQLITE_UTIL_H_
+#endif  // FCP_CLIENT_CONFIDENTIALCOMPUTE_STORAGE_SQLITE_UTIL_H_

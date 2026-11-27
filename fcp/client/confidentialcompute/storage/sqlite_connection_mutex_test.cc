@@ -13,21 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "fcp/client/privatelogger/common/sqlite_connection_mutex.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_connection_mutex.h"
 
 #include <memory>
 #include <thread>  // NOLINT(build/c++11)
 
 #include "gtest/gtest.h"
 #include "absl/synchronization/mutex.h"
-#include "fcp/client/privatelogger/common/sqlite_test_util.h"
+#include "fcp/client/confidentialcompute/storage/sqlite_test_util.h"
 #include "sqlite3.h"
 
-namespace fcp::client::privatelogger {
+namespace fcp::client::confidentialcompute::internal {
 namespace {
-
-using ::fcp::client::privatelogger::internal::OpenInMemory;
-using ::fcp::client::privatelogger::internal::ScopedSqlite;
 
 TEST(SqliteConnectionMutexTest, SameConnectionGetsTheSameMutex) {
   ScopedSqlite db = OpenInMemory();
@@ -86,4 +83,4 @@ TEST(SqliteConnectionMutexTest, ScopedLockAcceptsNull) {
 }
 
 }  // namespace
-}  // namespace fcp::client::privatelogger
+}  // namespace fcp::client::confidentialcompute::internal
